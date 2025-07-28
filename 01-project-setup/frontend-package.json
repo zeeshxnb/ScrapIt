@@ -1,0 +1,61 @@
+{
+  "_comment": "Frontend React Dependencies for ScrapIt",
+  "_structure": {
+    "name": "scrapit-frontend",
+    "version": "1.0.0",
+    "dependencies": {
+      "_core": [
+        "react",
+        "react-dom", 
+        "typescript",
+        "@types/react",
+        "@types/react-dom"
+      ],
+      "_ui": [
+        "@mui/material",
+        "@mui/icons-material",
+        "@emotion/react",
+        "@emotion/styled"
+      ],
+      "_routing": [
+        "react-router-dom",
+        "@types/react-router-dom"
+      ],
+      "_api": [
+        "axios"
+      ],
+      "_charts": [
+        "chart.js",
+        "react-chartjs-2"
+      ],
+      "_state": [
+        "@reduxjs/toolkit",
+        "react-redux"
+      ]
+    },
+    "devDependencies": {
+      "_testing": [
+        "@testing-library/react",
+        "@testing-library/jest-dom",
+        "@testing-library/user-event"
+      ],
+      "_build": [
+        "react-scripts",
+        "web-vitals"
+      ]
+    },
+    "scripts": {
+      "start": "react-scripts start",
+      "build": "react-scripts build", 
+      "test": "react-scripts test",
+      "eject": "react-scripts eject"
+    }
+  },
+  "_tips": [
+    "Use Create React App with TypeScript template",
+    "Material-UI provides consistent design system",
+    "Chart.js for analytics visualizations",
+    "Redux Toolkit for state management",
+    "Axios for API communication with interceptors"
+  ]
+}

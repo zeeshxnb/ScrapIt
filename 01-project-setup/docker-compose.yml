@@ -1,0 +1,29 @@
+# Docker Compose Configuration for ScrapIt
+# 
+# Services to include:
+# - PostgreSQL database
+# - Redis for caching and task queue
+# - Backend FastAPI service
+# - Frontend React service
+# - Celery worker for background tasks
+#
+# Tips:
+# - Use environment variables for sensitive data
+# - Set up volume mounts for database persistence
+# - Configure networks for service communication
+# - Add health checks for all services
+# - Use depends_on to manage startup order
+#
+# Example structure:
+# version: '3.8'
+# services:
+#   postgres:
+#     # PostgreSQL configuration
+#   redis:
+#     # Redis configuration  
+#   backend:
+#     # FastAPI backend
+#   frontend:
+#     # React frontend
+#   celery:
+#     # Background worker
