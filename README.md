@@ -66,7 +66,7 @@ ScrapIt/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/ScrapIt.git
+   git clone https://github.com/zeeshxnb/ScrapIt.git
    cd ScrapIt
    ```
 
