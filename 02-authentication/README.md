@@ -1,3 +1,16 @@
+# Authentication Module
+
+This module provides authentication logic for ScrapIt, including JWT and OAuth (Google) support.
+
+## Structure
+- `backend/auth/jwt.py`: JWT token utilities
+- `backend/auth/oauth.py`: Google OAuth utilities
+- `backend/models/user.py`: User model
+
+## Usage
+- Import and use the authentication utilities in your FastAPI app.
+- Configure secrets in your `.env` file.
+
 # 02 - Authentication System
 
 ## Overview

@@ -11,10 +11,12 @@ from cryptography.fernet import Fernet
 from datetime import datetime, timezone
 import uuid
 import os
+from pydantic import BaseModel
+from typing import Optional
 
 Base = declarative_base()
 
-class User(Base):
+class UserDB(Base):
     """User model for authentication and profile data"""
     
     __tablename__ = "users"
@@ -49,47 +51,47 @@ class User(Base):
     
     def _get_cipher_suite(self) -> Fernet:
         """Get encryption cipher suite"""
-        # TODO: Implement encryption key management
-        # key = os.environ.get('ENCRYPTION_KEY').encode()
-        # return Fernet(key)
-        pass
-    
+        key = os.environ.get('ENCRYPTION_KEY')
+        if not key:
+            raise ValueError("ENCRYPTION_KEY environment variable not set")
+        return Fernet(key.encode())
+
     def encrypt_token(self, token: str) -> str:
         """Encrypt OAuth token for secure storage"""
-        # TODO: Implement token encryption
-        # return self._cipher_suite.encrypt(token.encode()).decode()
-        pass
-    
+        if not self._cipher_suite:
+            self._cipher_suite = self._get_cipher_suite()
+        return self._cipher_suite.encrypt(token.encode()).decode()
+
     def decrypt_token(self, encrypted_token: str) -> str:
         """Decrypt stored OAuth token"""
-        # TODO: Implement token decryption
-        # return self._cipher_suite.decrypt(encrypted_token.encode()).decode()
-        pass
-    
+        if not self._cipher_suite:
+            self._cipher_suite = self._get_cipher_suite()
+        return self._cipher_suite.decrypt(encrypted_token.encode()).decode()
+
     def update_tokens(self, access_token: str, refresh_token: str) -> None:
         """Update OAuth tokens with encryption"""
-        # TODO: Implement token update with encryption
-        # self.access_token = self.encrypt_token(access_token)
-        # self.refresh_token = self.encrypt_token(refresh_token)
-        pass
-    
+        self.access_token = self.encrypt_token(access_token)
+        self.refresh_token = self.encrypt_token(refresh_token)
+
     def is_token_expired(self) -> bool:
         """Check if access token is expired"""
-        # TODO: Implement token expiration check
-        # Decode JWT and check exp claim
-        pass
-    
+        from jose import jwt
+        try:
+            payload = jwt.get_unverified_claims(self.get_decrypted_access_token())
+            exp = payload.get('exp')
+            if exp is None:
+                return True
+            return datetime.now(timezone.utc).timestamp() > exp
+        except Exception:
+            return True
+
     def get_decrypted_access_token(self) -> str:
         """Get decrypted access token"""
-        # TODO: Implement access token decryption
-        # return self.decrypt_token(self.access_token)
-        pass
-    
+        return self.decrypt_token(self.access_token) if self.access_token else None
+
     def get_decrypted_refresh_token(self) -> str:
         """Get decrypted refresh token"""
-        # TODO: Implement refresh token decryption
-        # return self.decrypt_token(self.refresh_token)
-        pass
+        return self.decrypt_token(self.refresh_token) if self.refresh_token else None
     
     def update_last_sync(self) -> None:
         """Update last sync timestamp"""
@@ -98,3 +100,10 @@ class User(Base):
     def __repr__(self) -> str:
         """String representation for debugging"""
         return f"<User(id={self.id}, email={self.email}, active={self.is_active})>"
+
+class User(BaseModel):
+    id: Optional[int]
+    email: str
+    full_name: Optional[str]
+    is_active: bool = True
+    is_superuser: bool = False
