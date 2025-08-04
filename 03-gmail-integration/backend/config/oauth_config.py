@@ -8,11 +8,11 @@ import os
 # OAuth configuration
 GOOGLE_CLIENT_ID = os.environ.get(
     "GOOGLE_CLIENT_ID", 
-    "656777491355-7mlqhc5eeaureoi6sbp37hjhn467kv15.apps.googleusercontent.com"
+    "YOUR_CLIENT_ID_HERE"
 )
 GOOGLE_CLIENT_SECRET = os.environ.get(
     "GOOGLE_CLIENT_SECRET", 
-    "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"
+    "YOUR_CLIENT_SECRET_HERE"
 )
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
 GOOGLE_AUTH_URI = "https://accounts.google.com/o/oauth2/auth"

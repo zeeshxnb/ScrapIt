@@ -42,6 +42,21 @@ Build Gmail API client wrapper with email fetching, rate limiting, and data stor
 - Deduplication to avoid storing duplicates
 - Progress tracking for long-running syncs
 
+## Environment Setup
+
+### OAuth Credentials
+For security reasons, OAuth credentials are not stored in the code. You need to set up environment variables:
+
+1. Create a `.env` file in the project root with:
+```
+GOOGLE_CLIENT_ID=your_google_client_id_here
+GOOGLE_CLIENT_SECRET=your_google_client_secret_here
+```
+
+2. Replace the placeholder values with your actual Google OAuth credentials.
+
+3. Make sure the `.env` file is in your `.gitignore` to avoid exposing secrets.
+
 ## Tips
 - Use Gmail API's batch requests for efficiency
 - Implement proper error handling for quota limits
