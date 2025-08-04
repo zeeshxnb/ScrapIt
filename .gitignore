@@ -81,6 +81,16 @@ Thumbs.db
 *.key
 secrets/
 credentials/
+oauth_tokens.json
+client_secrets.json
+token.json
+*_tokens.txt
+*_credentials.txt
+
+# Gmail API specific
+03-gmail-integration/backend/tests/tokens/
+03-gmail-integration/backend/tests/*.token
+03-gmail-integration/backend/tests/*.json
 
 # Testing
 .coverage

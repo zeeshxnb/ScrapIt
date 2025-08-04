@@ -70,13 +70,18 @@ ScrapIt/
    cd ScrapIt
    ```
 
-2. **Set up environment variables**
+2. **Install Python dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Set up environment variables**
    ```bash
    cp .env.example .env
    # Edit .env with your API keys and configuration
    ```
 
-3. **Start with Docker Compose**
+4. **Start with Docker Compose** (optional)
    ```bash
    docker-compose up -d
    ```

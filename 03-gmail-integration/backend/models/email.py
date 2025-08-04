@@ -78,11 +78,40 @@ class Email(Base):
         Returns:
             Plain text content without HTML tags
         """
-        # TODO: Implement text extraction
-        # Remove HTML tags
-        # Clean up formatting
-        # Return plain text
-        pass
+        if not self.content:
+            return ""
+            
+        # If content is already plain text, return it
+        if "<html" not in self.content.lower() and "<body" not in self.content.lower():
+            return self.content
+            
+        # Otherwise, try to extract text from HTML
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(self.content, 'html.parser')
+            
+            # Remove script and style elements
+            for script in soup(["script", "style"]):
+                script.extract()
+                
+            # Get text
+            text = soup.get_text()
+            
+            # Break into lines and remove leading and trailing space
+            lines = (line.strip() for line in text.splitlines())
+            
+            # Break multi-headlines into a line each
+            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+            
+            # Drop blank lines
+            text = '\n'.join(chunk for chunk in chunks if chunk)
+            
+            return text
+        except Exception:
+            # If HTML parsing fails, return original content with basic HTML tag removal
+            import re
+            text = re.sub(r'<[^>]+>', ' ', self.content)
+            return re.sub(r'\s+', ' ', text).strip()
     
     def get_sender_domain(self) -> str:
         """
@@ -91,11 +120,29 @@ class Email(Base):
         Returns:
             Domain part of sender email
         """
-        # TODO: Implement domain extraction
-        # Parse email address
-        # Extract domain part
-        # Handle edge cases
-        pass
+        if not self.sender:
+            return ""
+            
+        try:
+            # Extract email from "Name <email@domain.com>" format
+            import re
+            email_match = re.search(r'<([^>]+)>', self.sender)
+            
+            if email_match:
+                email = email_match.group(1)
+            else:
+                # If no angle brackets, assume the whole string is an email
+                email = self.sender
+                
+            # Extract domain part
+            domain_match = re.search(r'@([^>]+)$', email)
+            if domain_match:
+                return domain_match.group(1).lower()
+            else:
+                return ""
+                
+        except Exception:
+            return ""
     
     def get_sender_name(self) -> Optional[str]:
         """
@@ -104,10 +151,26 @@ class Email(Base):
         Returns:
             Sender display name or None
         """
-        # TODO: Implement name extraction
-        # Parse "Name <email@domain.com>" format
-        # Return display name
-        pass
+        if not self.sender:
+            return None
+            
+        try:
+            # Extract name from "Name <email@domain.com>" format
+            import re
+            name_match = re.match(r'^([^<]+)<', self.sender)
+            
+            if name_match:
+                name = name_match.group(1).strip()
+                return name if name else None
+            else:
+                # If no angle brackets, check if it's just an email
+                if '@' in self.sender:
+                    return None
+                else:
+                    return self.sender.strip()
+                    
+        except Exception:
+            return None
     
     def is_promotional(self) -> bool:
         """
@@ -116,11 +179,52 @@ class Email(Base):
         Returns:
             True if email appears promotional
         """
-        # TODO: Implement promotional detection
-        # Check for promotional keywords
-        # Analyze sender patterns
-        # Check labels for promotional indicators
-        pass
+        if not self.subject and not self.content and not self.labels:
+            return False
+            
+        # Check labels first (most reliable)
+        if self.labels and isinstance(self.labels, list):
+            promo_labels = ['CATEGORY_PROMOTIONS', 'CATEGORY_MARKETING']
+            if any(label in self.labels for label in promo_labels):
+                return True
+                
+        # Check for promotional keywords in subject
+        if self.subject:
+            promo_keywords = [
+                'offer', 'sale', 'discount', 'deal', 'promo', 'promotion', 
+                'subscribe', 'newsletter', 'off', 'save', 'limited time',
+                'exclusive', 'free', 'buy', 'shop', 'click', 'order now'
+            ]
+            
+            subject_lower = self.subject.lower()
+            if any(keyword in subject_lower for keyword in promo_keywords):
+                return True
+                
+        # Check sender domain against common marketing domains
+        domain = self.get_sender_domain()
+        if domain:
+            marketing_domains = [
+                'mailchimp.com', 'sendgrid.net', 'campaign-', 'marketing',
+                'newsletter', 'info@', 'noreply@', 'promotions', 'offers'
+            ]
+            
+            if any(marker in domain for marker in marketing_domains):
+                return True
+                
+        # Check content for promotional patterns
+        if self.content:
+            content_sample = self.content[:1000].lower()  # Check first 1000 chars for performance
+            
+            # Look for call-to-action phrases
+            cta_phrases = [
+                'click here', 'learn more', 'sign up', 'subscribe', 'buy now',
+                'limited time', 'special offer', 'discount', 'unsubscribe'
+            ]
+            
+            if any(phrase in content_sample for phrase in cta_phrases):
+                return True
+                
+        return False
     
     def has_attachments(self) -> bool:
         """
@@ -129,10 +233,24 @@ class Email(Base):
         Returns:
             True if email has attachments
         """
-        # TODO: Implement attachment detection
-        # Check Gmail labels or metadata
-        # Return attachment status
-        pass
+        # Check labels for attachment indicators
+        if self.labels and isinstance(self.labels, list):
+            if 'HAS_ATTACHMENT' in self.labels:
+                return True
+                
+        # Check content for attachment indicators
+        if self.content:
+            attachment_indicators = [
+                'Content-Disposition: attachment',
+                'filename=',
+                'Content-Type: application/'
+            ]
+            
+            for indicator in attachment_indicators:
+                if indicator in self.content:
+                    return True
+                    
+        return False
     
     def get_age_days(self) -> int:
         """
@@ -181,11 +299,58 @@ class Email(Base):
         Returns:
             Dictionary representation of email
         """
-        # TODO: Implement serialization
-        # Convert all fields to dict
-        # Handle datetime serialization
-        # Include computed fields
-        pass
+        # Format datetime objects
+        received_date_str = None
+        if self.received_date:
+            received_date_str = self.received_date.isoformat()
+            
+        processed_at_str = None
+        if self.processed_at:
+            processed_at_str = self.processed_at.isoformat()
+            
+        created_at_str = None
+        if self.created_at:
+            created_at_str = self.created_at.isoformat()
+        
+        # Create base dictionary
+        result = {
+            "id": str(self.id),
+            "user_id": str(self.user_id),
+            "gmail_id": self.gmail_id,
+            "thread_id": self.thread_id,
+            "subject": self.subject,
+            "sender": self.sender,
+            "recipient": self.recipient,
+            "snippet": self.snippet,
+            "received_date": received_date_str,
+            "labels": self.labels,
+            "category": self.category,
+            "confidence_score": self.confidence_score,
+            "is_spam": self.is_spam,
+            "cluster_id": self.cluster_id,
+            "processed_at": processed_at_str,
+            "created_at": created_at_str,
+        }
+        
+        # Add computed fields
+        result["sender_domain"] = self.get_sender_domain()
+        result["sender_name"] = self.get_sender_name()
+        result["is_promotional"] = self.is_promotional()
+        result["has_attachments"] = self.has_attachments()
+        result["age_days"] = self.get_age_days()
+        
+        # Don't include full content by default (can be large)
+        # Add a preview instead
+        if self.content:
+            preview_length = 500
+            content_preview = self.content[:preview_length]
+            if len(self.content) > preview_length:
+                content_preview += "..."
+            result["content_preview"] = content_preview
+        else:
+            result["content_preview"] = None
+            
+        return result
     
     def __repr__(self) -> str:
         """String representation for debugging"""
