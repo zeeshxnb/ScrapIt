@@ -163,6 +163,7 @@ if __name__ == "__main__":
                     print(f"Found {len(messages)} messages:")
                     for i, message in enumerate(messages, 1):
                         msg = service.users().messages().get(userId='me', id=message['id']).execute()
+                    
                         headers = msg['payload']['headers']
                         subject = next((header['value'] for header in headers if header['name'].lower() == 'subject'), 'No Subject')
                         sender = next((header['value'] for header in headers if header['name'].lower() == 'from'), 'Unknown')
