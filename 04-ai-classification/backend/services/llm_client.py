@@ -4,7 +4,6 @@ LLM API Client
 Wrapper for OpenAI and Claude APIs for email classification
 """
 import openai
-import anthropic
 import json
 import logging
 import asyncio
@@ -18,7 +17,6 @@ logger = logging.getLogger(__name__)
 class LLMProvider(Enum):
     """Supported LLM providers"""
     OPENAI = "openai"
-    CLAUDE = "claude"
 
 @dataclass
 class ClassificationResult:
@@ -52,11 +50,8 @@ class LLMClient:
     MODELS = {
         LLMProvider.OPENAI: {
             "gpt-4": {"max_tokens": 8192, "cost_per_1k": 0.03},
-            "gpt-3.5-turbo": {"max_tokens": 4096, "cost_per_1k": 0.002}
-        },
-        LLMProvider.CLAUDE: {
-            "claude-3-sonnet": {"max_tokens": 200000, "cost_per_1k": 0.015},
-            "claude-3-haiku": {"max_tokens": 200000, "cost_per_1k": 0.0025}
+            "gpt-3.5-turbo": {"max_tokens": 4096, "cost_per_1k": 0.002},
+            "o1": {"max_tokens": 32768, "cost_per_1k": 0.15}
         }
     }
     
@@ -75,11 +70,8 @@ class LLMClient:
         self.usage_stats = {"requests": 0, "tokens": 0, "cost": 0.0}
         
         # Initialize client
-        if self.provider == LLMProvider.OPENAI:
-            openai.api_key = api_key
-            self.client = openai
-        elif self.provider == LLMProvider.CLAUDE:
-            self.client = anthropic.Anthropic(api_key=api_key)
+        openai.api_key = api_key
+        self.client = openai
     
     async def classify_email(self, subject: str, content: str, sender: str) -> ClassificationResult:
         """
@@ -188,13 +180,7 @@ class LLMClient:
         # Handle errors and retries
         pass
     
-    async def _make_claude_request(self, prompt: str, system_message: str = None) -> Dict[str, Any]:
-        """Make request to Claude API"""
-        # TODO: Implement Claude API call
-        # Build request parameters
-        # Handle errors and retries
-        # Parse response
-        pass
+    # Claude API removed as per requirements
     
     def _parse_classification_response(self, response: str) -> ClassificationResult:
         """Parse LLM response into ClassificationResult"""
