@@ -70,13 +70,18 @@ ScrapIt/
    cd ScrapIt
    ```
 
-2. **Set up environment variables**
+2. **Install Python dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Set up environment variables**
    ```bash
    cp .env.example .env
    # Edit .env with your API keys and configuration
    ```
 
-3. **Start with Docker Compose**
+4. **Start with Docker Compose** (optional)
    ```bash
    docker-compose up -d
    ```
@@ -93,9 +98,38 @@ Each numbered folder represents a development phase:
 ## 🔧 Configuration
 
 ### Required API Keys
-- **Google OAuth**: Client ID and Secret from Google Cloud Console
+
+#### Google OAuth Credentials
+
+To use the Gmail integration features, you need to set up Google OAuth credentials:
+
+1. **Create a project in Google Cloud Console**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project or select an existing one
+   - Enable the Gmail API for your project
+
+2. **Create OAuth credentials**
+   - Go to "APIs & Services" > "Credentials"
+   - Click "Create Credentials" > "OAuth client ID"
+   - Select "Desktop app" as the application type
+   - Give your client a name and click "Create"
+
+3. **Configure environment variables**
+   - Create or edit your `.env` file in the project root
+   - Add the following variables:
+   ```
+   GOOGLE_CLIENT_ID=your_client_id_here
+   GOOGLE_CLIENT_SECRET=your_client_secret_here
+   GOOGLE_PROJECT_ID=your-project-id-here
+   ```
+
+4. **Security best practices**
+   - Never commit your `.env` file to version control
+   - Keep your OAuth credentials secure
+   - Regularly rotate your client secret for production environments
+
+#### Other Required API Keys
 - **OpenAI API**: API key for email classification
-- **Gmail API**: Enabled in Google Cloud Console
 
 ### Database Setup
 ```bash
