@@ -133,7 +133,7 @@
     - Add error handling and retry logic for failed tasks
     - _Requirements: 6.2, 7.4_
   
-  - [ ] 9.2 Build task monitoring and management
+  - [ ] 9.2 Build task monitoring and management   
     - Create task status tracking in database
     - Implement real-time progress updates using WebSockets
     - Build task cancellation and cleanup functionality
