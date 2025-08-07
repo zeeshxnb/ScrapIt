@@ -1,198 +1,138 @@
-# ScrapIt - AI-Powered Email Cleaner
+# ScrapIt - Email Cleaner
 
-An intelligent web-based email management system that uses AI to automatically clean, categorize, and organize Gmail inboxes.
+AI-powered email cleaning and organization tool with organized modular structure.
 
-## 🚀 Features
-
-- **AI-Powered Classification**: Uses OpenAI/Claude APIs to intelligently categorize emails
-- **Smart Spam Detection**: Advanced spam detection with sender reputation tracking
-- **Bulk Operations**: Safe bulk delete, archive, and organize operations
-- **Email Clustering**: K-means clustering for automatic email organization
-- **Analytics Dashboard**: Comprehensive insights and email pattern analysis
-- **Real-time Processing**: Background task processing with progress tracking
-
-## 🛠 Tech Stack
-
-### Backend
-- **FastAPI** - Modern Python web framework
-- **PostgreSQL** - Primary database
-- **Redis** - Caching and task queue
-- **Celery** - Background task processing
-- **SQLAlchemy** - Database ORM
-- **OpenAI/Claude APIs** - AI classification
-- **Gmail API** - Email integration
-
-### Frontend
-- **React 18** - UI framework
-- **TypeScript** - Type safety
-- **Material-UI** - Component library
-- **Chart.js** - Data visualization
-- **Redux Toolkit** - State management
-
-### Infrastructure
-- **Docker** - Containerization
-- **AWS ECS** - Container orchestration
-- **AWS RDS** - Managed database
-- **AWS ElastiCache** - Managed Redis
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 ScrapIt/
-├── 01-project-setup/           # Development environment setup
-├── 02-authentication/          # Google OAuth & JWT authentication
-├── 03-gmail-integration/       # Gmail API client and email sync
-├── 04-ai-classification/       # LLM-powered email classification
-├── 05-spam-detection/          # Spam detection and sender management
-├── 06-bulk-operations/         # Bulk email management operations
-├── 07-analytics-dashboard/     # Data visualization and insights
-├── 08-react-frontend/          # React TypeScript frontend
-├── 09-background-processing/   # Celery task management
-├── 10-testing-suite/          # Comprehensive testing framework
-├── 11-deployment-infrastructure/ # Docker and AWS deployment
-└── 12-final-integration/      # End-to-end testing and launch prep
+├── 01-project-setup/
+│   └── main.py              # FastAPI application entry point
+├── 02-authentication/
+│   └── auth.py              # Google OAuth + JWT authentication
+├── 03-gmail-integration/
+│   └── gmail.py             # Gmail API integration + email sync
+├── 04-ai-classification/
+│   └── ai.py                # OpenAI email classification + spam detection
+├── 05-chatbot/
+│   └── chatbot.py           # Email management chatbot assistant
+├── models.py                # All database models (User, Email)
+├── database.py              # Database configuration
+├── requirements.txt         # Dependencies
+├── .env.example            # Environment variables template
+└── README.md               # This file
 ```
 
-## 🚦 Getting Started
+## Features
 
-### Prerequisites
-- Python 3.9+
-- Node.js 16+
-- Docker & Docker Compose
-- PostgreSQL
-- Redis
+- ✅ **Google OAuth Authentication** - Secure login with Gmail access
+- ✅ **Gmail Integration** - Sync and manage emails from Gmail API
+- ✅ **AI Classification** - OpenAI-powered email categorization
+- ✅ **Spam Detection** - Automatic spam identification and removal
+- ✅ **Modular Design** - Organized by feature with clear separation
 
-### Environment Setup
+## Quick Start
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/zeeshxnb/ScrapIt.git
-   cd ScrapIt
-   ```
-
-2. **Install Python dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your API keys and configuration
-   ```
-
-4. **Start with Docker Compose** (optional)
-   ```bash
-   docker-compose up -d
-   ```
-
-### Development Workflow
-
-Each numbered folder represents a development phase:
-
-1. **Start with `01-project-setup/`** - Set up your development environment
-2. **Follow the README in each folder** for detailed implementation guidance
-3. **Use the skeleton files** as templates for your code implementation
-4. **Test incrementally** as you complete each phase
-
-## 🔧 Configuration
-
-### Required API Keys
-
-#### Google OAuth Credentials
-
-To use the Gmail integration features, you need to set up Google OAuth credentials:
-
-1. **Create a project in Google Cloud Console**
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Create a new project or select an existing one
-   - Enable the Gmail API for your project
-
-2. **Create OAuth credentials**
-   - Go to "APIs & Services" > "Credentials"
-   - Click "Create Credentials" > "OAuth client ID"
-   - Select "Desktop app" as the application type
-   - Give your client a name and click "Create"
-
-3. **Configure environment variables**
-   - Create or edit your `.env` file in the project root
-   - Add the following variables:
-   ```
-   GOOGLE_CLIENT_ID=your_client_id_here
-   GOOGLE_CLIENT_SECRET=your_client_secret_here
-   GOOGLE_PROJECT_ID=your-project-id-here
-   ```
-
-4. **Security best practices**
-   - Never commit your `.env` file to version control
-   - Keep your OAuth credentials secure
-   - Regularly rotate your client secret for production environments
-
-#### Other Required API Keys
-- **OpenAI API**: API key for email classification
-
-### Database Setup
+1. **Install dependencies:**
 ```bash
-# Create database
-createdb scrapit
-
-# Run migrations
-alembic upgrade head
+pip install -r requirements.txt
 ```
 
-## 🧪 Testing
+2. **Configure environment:**
+```bash
+cp .env.example .env
+# Edit .env with your API keys
+```
+
+3. **Run the application:**
+```bash
+python 01-project-setup/main.py
+```
+
+## API Endpoints
+
+### Authentication
+- `GET /auth/google` - Start Google OAuth flow
+- `GET /auth/callback` - OAuth callback handler
+- `GET /auth/me` - Get current user info
+- `DELETE /auth/logout` - Logout user
+
+### Gmail Integration
+- `POST /gmail/sync` - Sync emails from Gmail
+- `GET /gmail/emails` - Get user's emails
+
+### AI Classification
+- `POST /ai/classify` - Classify emails using AI
+- `GET /ai/categories` - Get email categories summary
+- `GET /ai/spam` - Get spam emails
+- `DELETE /ai/spam` - Delete all spam emails
+
+### Chatbot Assistant
+- `POST /chat/chat` - Chat with email management assistant
+- `GET /chat/suggestions` - Get suggested chat prompts
+
+## Module Details
+
+### 01-project-setup/main.py
+- FastAPI application setup
+- Router integration
+- CORS configuration
+- Health check endpoints
+
+### 02-authentication/auth.py
+- Google OAuth 2.0 flow
+- JWT token management
+- User authentication middleware
+- Login/logout endpoints
+
+### 03-gmail-integration/gmail.py
+- Gmail API client wrapper
+- Email synchronization service
+- Message retrieval and parsing
+- Email management endpoints
+
+### 04-ai-classification/ai.py
+- OpenAI integration for email classification
+- Spam detection algorithms
+- Batch processing for multiple emails
+- Category analysis and reporting
+
+### Core Files
+- **models.py** - SQLAlchemy models for User and Email
+- **database.py** - Database connection and session management
+
+## Environment Variables
 
 ```bash
-# Backend tests
-cd backend
-pytest
+# Database
+DATABASE_URL=sqlite:///scrapit.db
 
-# Frontend tests
-cd frontend
-npm test
+# JWT Authentication
+JWT_SECRET_KEY=your-secret-key
 
-# End-to-end tests
-npm run test:e2e
+# Google OAuth
+GOOGLE_CLIENT_ID=your-client-id
+GOOGLE_CLIENT_SECRET=your-client-secret
+REDIRECT_URI=http://localhost:8000/auth/callback
+
+# OpenAI
+OPENAI_API_KEY=your-openai-key
+
+# Security
+ENCRYPTION_KEY=your-encryption-key
 ```
 
-## 🚀 Deployment
+## Development
 
-### Docker Deployment
-```bash
-docker-compose -f docker-compose.prod.yml up -d
-```
+The modular structure makes it easy to:
+- **Understand** - Each module has a clear purpose
+- **Develop** - Work on features independently  
+- **Test** - Test modules in isolation
+- **Deploy** - Scale individual components
+- **Maintain** - Update specific functionality without affecting others
 
-### AWS Deployment
-See `11-deployment-infrastructure/` for detailed AWS setup instructions.
-
-## 📊 Data Science Features
-
-- **Email Classification**: Multi-category classification using LLMs
-- **Clustering Analysis**: K-means clustering for email organization
-- **Sender Reputation**: Machine learning-based sender scoring
-- **Pattern Recognition**: Time series analysis of email patterns
-- **Spam Detection**: Advanced spam detection algorithms
-
-## 🤝 Contributing
-
-This is a collaborative project between team members. Each folder contains detailed implementation guides and TODO comments to help with development.
-
-### Development Guidelines
-- Follow the numbered folder sequence for implementation
-- Use the provided class structures and method signatures
-- Implement comprehensive error handling and logging
-- Write tests for all new functionality
-
-## 📝 License
-
-This project is for educational and portfolio purposes.
-
-## 🔗 Links
-
-- [Project Specification](.kiro/specs/ai-email-cleaner/)
-- [API Documentation](docs/API_DOCUMENTATION.md)
-- [Deployment Guide](docs/DEPLOYMENT_GUIDE.md)
-
----
-
-**Built with ❤️ for efficient email management**
+## File Count: 9 files total
+- **Before**: 50+ scattered files
+- **After**: 8 organized files (84% reduction!)
+- **Structure**: Maintained for clarity
+- **Functionality**: Complete and consolidated
