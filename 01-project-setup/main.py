@@ -7,14 +7,22 @@ from fastapi.middleware.cors import CORSMiddleware
 # Import consolidated modules
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
+# Add parent directory to path for imports
+parent_dir = os.path.dirname(os.path.dirname(__file__))
+sys.path.append(parent_dir)
+
+# Import from the consolidated modules
+sys.path.append(os.path.join(parent_dir, '02-authentication'))
 from auth import auth_router
-from gmail import gmail_router  
+
+sys.path.append(os.path.join(parent_dir, '03-gmail-integration'))
+from gmail import gmail_router
+
+sys.path.append(os.path.join(parent_dir, '04-ai-classification'))
 from ai import ai_router
 
-# Add chatbot path
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), '05-chatbot'))
+sys.path.append(os.path.join(parent_dir, '05-chatbot'))
 from chatbot import chatbot_router
 
 app = FastAPI(

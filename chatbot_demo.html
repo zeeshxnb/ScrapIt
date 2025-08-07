@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScrapIt Chatbot Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .chat-container {
+            height: 500px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        
+        .message {
+            margin: 15px 0;
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .message.user {
+            justify-content: flex-end;
+        }
+        
+        .message-content {
+            max-width: 70%;
+            padding: 15px 20px;
+            border-radius: 20px;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+        
+        .message.bot .message-content {
+            background: white;
+            border: 1px solid #e9ecef;
+            margin-left: 10px;
+        }
+        
+        .message.user .message-content {
+            background: #007bff;
+            color: white;
+            margin-right: 10px;
+        }
+        
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            flex-shrink: 0;
+        }
+        
+        .bot-avatar {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        
+        .user-avatar {
+            background: #007bff;
+            color: white;
+        }
+        
+        .suggestions {
+            padding: 15px 20px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .suggestions h4 {
+            margin: 0 0 10px 0;
+            color: #6c757d;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+        
+        .suggestion-btn {
+            display: inline-block;
+            margin: 5px 5px 5px 0;
+            padding: 8px 15px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 20px;
+            color: #495057;
+            text-decoration: none;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .suggestion-btn:hover {
+            background: #e9ecef;
+            transform: translateY(-1px);
+        }
+        
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .message-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 25px;
+            font-size: 0.95em;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        .message-input:focus {
+            border-color: #007bff;
+        }
+        
+        .send-btn {
+            padding: 15px 25px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        
+        .send-btn:hover {
+            background: #0056b3;
+        }
+        
+        .quick-actions {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .quick-action {
+            display: inline-block;
+            margin: 5px;
+            padding: 10px 15px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            color: #495057;
+            text-decoration: none;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .quick-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .quick-action.destructive {
+            border-color: #dc3545;
+            color: #dc3545;
+        }
+        
+        .quick-action.primary {
+            border-color: #007bff;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 ScrapIt Assistant</h1>
+            <p>Your AI-powered email management companion</p>
+        </div>
+        
+        <div class="chat-container" id="chatContainer">
+            <div class="message bot">
+                <div class="avatar bot-avatar">🤖</div>
+                <div class="message-content">
+                    Hi! I'm your ScrapIt assistant. I can help you manage your emails with natural language commands. Try asking me to "delete spam emails" or "show my email stats"!
+                </div>
+            </div>
+        </div>
+        
+        <div class="suggestions">
+            <h4>💡 Try these commands:</h4>
+            <span class="suggestion-btn" onclick="sendMessage('Delete my spam emails')">Delete spam emails</span>
+            <span class="suggestion-btn" onclick="sendMessage('Show me my email stats')">Show email stats</span>
+            <span class="suggestion-btn" onclick="sendMessage('Classify my emails')">Classify emails</span>
+            <span class="suggestion-btn" onclick="sendMessage('Find emails from john@example.com')">Search emails</span>
+            <span class="suggestion-btn" onclick="sendMessage('What can you help me with?')">Help</span>
+        </div>
+        
+        <div class="quick-actions">
+            <div class="quick-action destructive">🗑️ Delete 15 Spam Emails</div>
+            <div class="quick-action primary">🤖 Classify 23 Emails</div>
+            <div class="quick-action">🔄 Sync Latest Emails</div>
+            <div class="quick-action">📊 View Statistics</div>
+        </div>
+        
+        <div class="input-area">
+            <div class="input-container">
+                <input type="text" class="message-input" id="messageInput" placeholder="Ask me anything about your emails..." onkeypress="handleKeyPress(event)">
+                <button class="send-btn" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chatContainer');
+        const messageInput = document.getElementById('messageInput');
+        
+        // Sample responses for demo
+        const demoResponses = {
+            'delete my spam emails': {
+                response: "I found 15 spam emails in your inbox. Would you like me to delete them all? This action cannot be undone.",
+                action: "delete_spam",
+                suggestions: ["Yes, delete all spam", "Show me the spam first", "Cancel"]
+            },
+            'show me my email stats': {
+                response: "Here's your email overview: 247 total emails, 15 spam, 23 unprocessed. Your top categories are: Work (89), Personal (45), Shopping (32), Newsletters (28).",
+                action: "show_stats",
+                suggestions: ["Delete spam emails", "Classify unprocessed emails", "Show work emails"]
+            },
+            'classify my emails': {
+                response: "I'll classify your 23 unprocessed emails using AI. This will categorize them into Work, Personal, Shopping, Newsletters, and other categories.",
+                action: "classify_emails", 
+                suggestions: ["Start classification", "Show unprocessed emails", "Cancel"]
+            },
+            'find emails from john@example.com': {
+                response: "I found 8 emails from john@example.com. The most recent was 'Project Update' received 2 days ago. Would you like to see all of them?",
+                action: "search_emails",
+                suggestions: ["Show all emails from John", "Search for another sender", "Show recent emails"]
+            },
+            'what can you help me with?': {
+                response: "I can help you manage your emails! Here's what I can do:\n\n• Clean up: Delete spam emails\n• Organize: Classify emails by category\n• Search: Find emails by sender, subject, or content\n• Stats: Show email summaries and analytics\n• Sync: Get your latest emails from Gmail\n\nJust ask me naturally - I understand conversational language!",
+                action: "help",
+                suggestions: ["Delete spam emails", "Show email stats", "Classify emails", "Sync emails"]
+            }
+        };
+        
+        function addMessage(content, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
+            
+            const avatar = document.createElement('div');
+            avatar.className = `avatar ${isUser ? 'user-avatar' : 'bot-avatar'}`;
+            avatar.textContent = isUser ? '👤' : '🤖';
+            
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            messageContent.textContent = content;
+            
+            if (isUser) {
+                messageDiv.appendChild(messageContent);
+                messageDiv.appendChild(avatar);
+            } else {
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(messageContent);
+            }
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        function sendMessage(message = null) {
+            const text = message || messageInput.value.trim();
+            if (!text) return;
+            
+            // Add user message
+            addMessage(text, true);
+            
+            // Clear input
+            if (!message) messageInput.value = '';
+            
+            // Simulate bot response
+            setTimeout(() => {
+                const response = demoResponses[text.toLowerCase()] || {
+                    response: "I understand you want help with that. In a real implementation, I'd process your request and help manage your emails accordingly!",
+                    suggestions: ["Show email stats", "Delete spam", "Classify emails"]
+                };
+                
+                addMessage(response.response);
+                
+                // Update suggestions
+                if (response.suggestions) {
+                    updateSuggestions(response.suggestions);
+                }
+            }, 1000);
+        }
+        
+        function updateSuggestions(suggestions) {
+            const suggestionsDiv = document.querySelector('.suggestions');
+            const suggestionsHTML = suggestions.map(s => 
+                `<span class="suggestion-btn" onclick="sendMessage('${s}')">${s}</span>`
+            ).join('');
+            
+            suggestionsDiv.innerHTML = `
+                <h4>💡 Try these:</h4>
+                ${suggestionsHTML}
+            `;
+        }
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+        
+        // Focus input on load
+        messageInput.focus();
+    </script>
+</body>
+</html>
