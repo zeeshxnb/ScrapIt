@@ -12,11 +12,6 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 import json
 
-import sys
-parent_dir = os.path.dirname(os.path.dirname(__file__))
-sys.path.append(parent_dir)
-sys.path.append(os.path.join(parent_dir, '02-authentication'))
-
 from database import get_db
 from models import User, Email
 from auth import get_current_user

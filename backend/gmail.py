@@ -10,10 +10,6 @@ from sqlalchemy.orm import Session
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
 from database import get_db
 from models import User, Email
 from auth import get_current_user

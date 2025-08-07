@@ -10,10 +10,6 @@ from sqlalchemy.orm import Session
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
 from database import get_db
 from models import User
 
