@@ -4,7 +4,8 @@ Handles email classification using OpenAI and clustering
 """
 import os
 import openai
-from fastapi import APIRouter, Depends
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -17,60 +18,175 @@ router = APIRouter()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def classify_email(email: Email) -> dict:
-    """Classify single email using OpenAI"""
+    """Classify single email using OpenAI with enhanced spam detection"""
     try:
+        # Enhanced prompt for better spam detection
         prompt = f"""
-        Classify this email as one of: work, personal, promotional, spam, newsletter, social
+        Analyze this email and provide classification:
         
         Subject: {email.subject}
         From: {email.sender}
         Content: {email.snippet}
         
-        Respond with just the category and confidence (0-1):
-        Category: 
-        Confidence: 
-        Is_Spam: true/false
+        Consider these spam indicators:
+        - Suspicious sender patterns
+        - Promotional language
+        - Urgency tactics
+        - Suspicious links or attachments
+        - Poor grammar/spelling
+        - Generic greetings
+        
+        Respond in this exact format:
+        Category: [work/personal/promotional/spam/newsletter/social]
+        Confidence: [0.0-1.0]
+        Is_Spam: [true/false]
+        Spam_Reason: [brief explanation if spam]
+        Sender_Risk: [low/medium/high]
         """
         
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=50,
+            max_tokens=150,
             temperature=0.1
         )
         
         result = response.choices[0].message.content.strip()
         
-        # Parse response
+        # Parse enhanced response
         lines = result.split('\n')
         category = "unknown"
         confidence = 0.5
         is_spam = False
+        spam_reason = ""
+        sender_risk = "low"
         
         for line in lines:
             if line.startswith("Category:"):
-                category = line.split(":")[1].strip().lower()
+                category = line.split(":", 1)[1].strip().lower()
             elif line.startswith("Confidence:"):
                 try:
-                    confidence = float(line.split(":")[1].strip())
+                    confidence = float(line.split(":", 1)[1].strip())
                 except:
                     confidence = 0.5
             elif line.startswith("Is_Spam:"):
                 is_spam = "true" in line.lower()
+            elif line.startswith("Spam_Reason:"):
+                spam_reason = line.split(":", 1)[1].strip()
+            elif line.startswith("Sender_Risk:"):
+                sender_risk = line.split(":", 1)[1].strip().lower()
+        
+        # Additional rule-based spam detection
+        spam_score = calculate_spam_score(email)
+        
+        # Combine AI and rule-based detection
+        if spam_score > 0.7 and not is_spam:
+            is_spam = True
+            spam_reason = f"Rule-based detection (score: {spam_score:.2f})"
         
         return {
             "category": category,
             "confidence": confidence,
-            "is_spam": is_spam
+            "is_spam": is_spam,
+            "spam_reason": spam_reason,
+            "sender_risk": sender_risk,
+            "spam_score": spam_score
         }
         
     except Exception as e:
+        # Fallback to rule-based detection if AI fails
+        spam_score = calculate_spam_score(email)
         return {
             "category": "unknown",
             "confidence": 0.0,
-            "is_spam": False,
+            "is_spam": spam_score > 0.8,
+            "spam_reason": f"Rule-based fallback (score: {spam_score:.2f})",
+            "sender_risk": "medium" if spam_score > 0.5 else "low",
+            "spam_score": spam_score,
             "error": str(e)
         }
+
+def calculate_spam_score(email: Email) -> float:
+    """Calculate spam score using rule-based detection"""
+    score = 0.0
+    
+    # Check subject line
+    spam_subjects = [
+        'urgent', 'act now', 'limited time', 'free', 'winner', 'congratulations',
+        'click here', 'buy now', 'discount', 'offer expires', 'no obligation',
+        'risk free', 'satisfaction guaranteed', 'money back', 'as seen on',
+        'weight loss', 'make money', 'work from home', 'get paid'
+    ]
+    
+    subject_lower = email.subject.lower()
+    for spam_word in spam_subjects:
+        if spam_word in subject_lower:
+            score += 0.2
+    
+    # Check for excessive caps
+    if email.subject.isupper() and len(email.subject) > 10:
+        score += 0.3
+    
+    # Check for excessive punctuation
+    if email.subject.count('!') > 2 or email.subject.count('?') > 2:
+        score += 0.2
+    
+    # Check sender patterns
+    sender_lower = email.sender.lower()
+    
+    # Suspicious sender patterns
+    if any(pattern in sender_lower for pattern in ['noreply', 'no-reply', 'donotreply']):
+        score += 0.1
+    
+    # Random character patterns
+    if len([c for c in email.sender if c.isdigit()]) > len(email.sender) * 0.3:
+        score += 0.3
+    
+    # Check content
+    if email.snippet:
+        content_lower = email.snippet.lower()
+        spam_phrases = [
+            'click here', 'act now', 'limited time', 'expires soon',
+            'unsubscribe', 'remove me', 'opt out', 'viagra', 'cialis',
+            'lose weight', 'make money fast', 'work from home',
+            'congratulations you have won', 'claim your prize'
+        ]
+        
+        for phrase in spam_phrases:
+            if phrase in content_lower:
+                score += 0.15
+    
+    # Cap the score at 1.0
+    return min(score, 1.0)
+
+def analyze_sender_patterns(db: Session, sender: str) -> dict:
+    """Analyze sender patterns for risk assessment"""
+    # Get all emails from this sender
+    sender_emails = db.query(Email).filter(Email.sender == sender).all()
+    
+    if not sender_emails:
+        return {"risk": "unknown", "email_count": 0}
+    
+    total_emails = len(sender_emails)
+    spam_count = sum(1 for email in sender_emails if email.is_spam)
+    spam_ratio = spam_count / total_emails if total_emails > 0 else 0
+    
+    # Calculate risk level
+    if spam_ratio > 0.8:
+        risk = "high"
+    elif spam_ratio > 0.4:
+        risk = "medium"
+    else:
+        risk = "low"
+    
+    return {
+        "risk": risk,
+        "email_count": total_emails,
+        "spam_count": spam_count,
+        "spam_ratio": spam_ratio,
+        "first_seen": min(email.received_date for email in sender_emails if email.received_date),
+        "last_seen": max(email.received_date for email in sender_emails if email.received_date)
+    }
 
 def classify_emails_batch(db: Session, user_id: str, limit: int = 10) -> dict:
     """Classify unprocessed emails in batch"""
@@ -170,6 +286,244 @@ async def delete_spam_emails(
     db.commit()
     
     return {"deleted_count": spam_count}
+
+# Sender Management Routes
+@router.get("/senders/analysis")
+async def analyze_senders(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Analyze all senders for risk patterns"""
+    
+    # Get all unique senders for this user
+    senders = db.query(Email.sender).filter(
+        Email.user_id == current_user.id
+    ).distinct().all()
+    
+    sender_analysis = []
+    
+    for (sender,) in senders:
+        analysis = analyze_sender_patterns(db, sender)
+        sender_analysis.append({
+            "sender": sender,
+            **analysis
+        })
+    
+    # Sort by risk level and spam ratio
+    sender_analysis.sort(key=lambda x: (
+        {"high": 3, "medium": 2, "low": 1, "unknown": 0}[x["risk"]],
+        x.get("spam_ratio", 0)
+    ), reverse=True)
+    
+    return {
+        "senders": sender_analysis,
+        "total_senders": len(sender_analysis),
+        "high_risk_count": sum(1 for s in sender_analysis if s["risk"] == "high"),
+        "medium_risk_count": sum(1 for s in sender_analysis if s["risk"] == "medium")
+    }
+
+@router.post("/senders/flag")
+async def flag_sender(
+    sender: str,
+    flag_type: str,  # whitelist, blacklist, spam
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Flag a sender as whitelist, blacklist, or spam"""
+    
+    from models import SenderFlag
+    
+    # Check if flag already exists
+    existing_flag = db.query(SenderFlag).filter(
+        SenderFlag.user_id == current_user.id,
+        SenderFlag.sender == sender
+    ).first()
+    
+    if existing_flag:
+        # Update existing flag
+        existing_flag.flag_type = flag_type
+        existing_flag.user_confirmed = True
+        existing_flag.flagged_at = datetime.utcnow()
+    else:
+        # Create new flag
+        analysis = analyze_sender_patterns(db, sender)
+        
+        new_flag = SenderFlag(
+            user_id=current_user.id,
+            sender=sender,
+            flag_type=flag_type,
+            risk_level=analysis.get("risk", "unknown"),
+            confidence=0.9,  # High confidence for user actions
+            total_emails=analysis.get("email_count", 0),
+            spam_emails=analysis.get("spam_count", 0),
+            spam_ratio=analysis.get("spam_ratio", 0.0),
+            first_seen=analysis.get("first_seen"),
+            last_seen=analysis.get("last_seen"),
+            user_confirmed=True
+        )
+        
+        db.add(new_flag)
+    
+    # Update all emails from this sender based on flag
+    if flag_type == "spam" or flag_type == "blacklist":
+        db.query(Email).filter(
+            Email.user_id == current_user.id,
+            Email.sender == sender
+        ).update({
+            "is_spam": True,
+            "spam_reason": f"User flagged sender as {flag_type}"
+        })
+    elif flag_type == "whitelist":
+        db.query(Email).filter(
+            Email.user_id == current_user.id,
+            Email.sender == sender
+        ).update({
+            "is_spam": False,
+            "spam_reason": None
+        })
+    
+    db.commit()
+    
+    return {
+        "message": f"Sender {sender} flagged as {flag_type}",
+        "sender": sender,
+        "flag_type": flag_type
+    }
+
+@router.get("/senders/flags")
+async def get_sender_flags(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all sender flags for the user"""
+    
+    from models import SenderFlag
+    
+    flags = db.query(SenderFlag).filter(
+        SenderFlag.user_id == current_user.id
+    ).order_by(SenderFlag.flagged_at.desc()).all()
+    
+    return {
+        "flags": [
+            {
+                "id": flag.id,
+                "sender": flag.sender,
+                "flag_type": flag.flag_type,
+                "risk_level": flag.risk_level,
+                "total_emails": flag.total_emails,
+                "spam_emails": flag.spam_emails,
+                "spam_ratio": flag.spam_ratio,
+                "flagged_at": flag.flagged_at.isoformat() if flag.flagged_at else None,
+                "user_confirmed": flag.user_confirmed
+            }
+            for flag in flags
+        ],
+        "total_flags": len(flags),
+        "whitelist_count": sum(1 for f in flags if f.flag_type == "whitelist"),
+        "blacklist_count": sum(1 for f in flags if f.flag_type == "blacklist"),
+        "spam_count": sum(1 for f in flags if f.flag_type == "spam")
+    }
+
+@router.delete("/senders/flags/{flag_id}")
+async def remove_sender_flag(
+    flag_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Remove a sender flag"""
+    
+    from models import SenderFlag
+    
+    flag = db.query(SenderFlag).filter(
+        SenderFlag.id == flag_id,
+        SenderFlag.user_id == current_user.id
+    ).first()
+    
+    if not flag:
+        raise HTTPException(status_code=404, detail="Flag not found")
+    
+    sender = flag.sender
+    db.delete(flag)
+    db.commit()
+    
+    return {
+        "message": f"Flag removed for sender {sender}",
+        "sender": sender
+    }
+
+# Bulk Operations Routes
+from typing import List
+from pydantic import BaseModel
+
+class BulkRequest(BaseModel):
+    email_ids: List[str]
+    permanent: bool = False
+
+@router.post("/bulk/delete")
+async def bulk_delete(
+    request: BulkRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Bulk delete emails"""
+    if not request.email_ids or len(request.email_ids) > 1000:
+        raise HTTPException(status_code=400, detail="Invalid email IDs")
+    
+    try:
+        count = 0
+        for email_id in request.email_ids:
+            email = db.query(Email).filter(
+                Email.id == email_id,
+                Email.user_id == current_user.id
+            ).first()
+            if email:
+                if request.permanent:
+                    db.delete(email)
+                else:
+                    email.is_deleted = True
+                count += 1
+        
+        db.commit()
+        return {"message": f"Deleted {count} emails", "count": count}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/bulk/classify")
+async def bulk_classify(
+    request: BulkRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Bulk classify emails"""
+    if not request.email_ids or len(request.email_ids) > 500:
+        raise HTTPException(status_code=400, detail="Invalid email IDs")
+    
+    try:
+        count = 0
+        for email_id in request.email_ids:
+            email = db.query(Email).filter(
+                Email.id == email_id,
+                Email.user_id == current_user.id,
+                Email.is_processed == False
+            ).first()
+            
+            if email:
+                result = classify_email(email)
+                email.category = result.get("category", "unknown")
+                email.confidence_score = result.get("confidence", 0.0)
+                email.is_spam = result.get("is_spam", False)
+                email.spam_reason = result.get("spam_reason", "")
+                email.sender_risk = result.get("sender_risk", "low")
+                email.spam_score = result.get("spam_score", 0.0)
+                email.is_processed = True
+                count += 1
+        
+        db.commit()
+        return {"message": f"Classified {count} emails", "count": count}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Export router
 ai_router = router

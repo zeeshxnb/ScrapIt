@@ -87,6 +87,9 @@ token.json
 *_tokens.txt
 *_credentials.txt
 
+# Kiro IDE files
+.kiro/
+
 # Gmail API specific
 03-gmail-integration/backend/tests/tokens/
 03-gmail-integration/backend/tests/*.token

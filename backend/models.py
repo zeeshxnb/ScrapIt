@@ -1,81 +1,139 @@
 """
 Database Models - Consolidated
-All database models for ScrapIt
+User and Email models with encryption support
 """
-import uuid
 import os
+import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, Boolean, DateTime, Float, JSON, ForeignKey
+from sqlalchemy import Column, String, DateTime, Boolean, Text, Float, ForeignKey, JSON, Integer
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import declarative_base, relationship
 from cryptography.fernet import Fernet
 
 Base = declarative_base()
 
-# Encryption for sensitive data
-ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", Fernet.generate_key())
-cipher_suite = Fernet(ENCRYPTION_KEY)
+# Encryption setup
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "dev-key").encode()
+if len(ENCRYPTION_KEY) < 32:
+    ENCRYPTION_KEY = ENCRYPTION_KEY.ljust(32, b'0')[:32]
+
+try:
+    cipher_suite = Fernet(Fernet.generate_key())
+except:
+    # Fallback for development
+    cipher_suite = None
 
 class User(Base):
-    """User with encrypted OAuth tokens"""
     __tablename__ = "users"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    google_id = Column(String(255), unique=True, index=True, nullable=False)
-    access_token = Column(Text, nullable=False)  # Encrypted
-    refresh_token = Column(Text, nullable=False)  # Encrypted
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String(255), unique=True, nullable=False)
+    google_id = Column(String(255), unique=True, nullable=False)
+    access_token = Column(Text)  # Encrypted
+    refresh_token = Column(Text)  # Encrypted
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     emails = relationship("Email", back_populates="user")
+    sender_flags = relationship("SenderFlag", back_populates="user")
     
     def set_access_token(self, token: str):
-        self.access_token = cipher_suite.encrypt(token.encode()).decode()
+        """Encrypt and store access token"""
+        if cipher_suite and token:
+            self.access_token = cipher_suite.encrypt(token.encode()).decode()
+        else:
+            self.access_token = token
     
     def get_access_token(self) -> str:
-        return cipher_suite.decrypt(self.access_token.encode()).decode()
+        """Decrypt and return access token"""
+        if cipher_suite and self.access_token:
+            try:
+                return cipher_suite.decrypt(self.access_token.encode()).decode()
+            except:
+                return self.access_token
+        return self.access_token or ""
     
     def set_refresh_token(self, token: str):
-        self.refresh_token = cipher_suite.encrypt(token.encode()).decode()
+        """Encrypt and store refresh token"""
+        if cipher_suite and token:
+            self.refresh_token = cipher_suite.encrypt(token.encode()).decode()
+        else:
+            self.refresh_token = token
     
     def get_refresh_token(self) -> str:
-        return cipher_suite.decrypt(self.refresh_token.encode()).decode()
+        """Decrypt and return refresh token"""
+        if cipher_suite and self.refresh_token:
+            try:
+                return cipher_suite.decrypt(self.refresh_token.encode()).decode()
+            except:
+                return self.refresh_token
+        return self.refresh_token or ""
 
 class Email(Base):
-    """Email with AI classification"""
     __tablename__ = "emails"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False, index=True)
-    gmail_id = Column(String(255), nullable=False, unique=True, index=True)
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    gmail_id = Column(String(255), unique=True, nullable=False)
     
     # Email content
-    subject = Column(String(1000), nullable=True)
-    sender = Column(String(500), nullable=False, index=True)
-    recipient = Column(String(500), nullable=True)
-    content = Column(Text, nullable=True)
-    snippet = Column(String(500), nullable=True)
-    received_date = Column(DateTime, nullable=False, index=True)
-    labels = Column(JSON, nullable=True)
+    subject = Column(String(1000))
+    sender = Column(String(500))
+    recipient = Column(String(500))
+    content = Column(Text)  # Full email content
+    snippet = Column(String(500))  # Preview text
     
-    # AI classification
-    category = Column(String(100), nullable=True, index=True)
-    confidence_score = Column(Float, nullable=True)
-    is_spam = Column(Boolean, default=False, index=True)
-    is_processed = Column(Boolean, default=False, index=True)
+    # Metadata
+    received_date = Column(DateTime)
+    labels = Column(JSON)  # Gmail labels
+    
+    # AI Classification
+    category = Column(String(100))  # work, personal, spam, etc.
+    confidence_score = Column(Float)  # AI confidence 0-1
+    spam_score = Column(Float)  # Rule-based spam score 0-1
+    spam_reason = Column(String(500))  # Why it's considered spam
+    sender_risk = Column(String(20))  # low, medium, high
     
     # Status flags
-    is_deleted = Column(Boolean, default=False, index=True)
-    is_archived = Column(Boolean, default=False, index=True)
+    is_spam = Column(Boolean, default=False)
+    is_processed = Column(Boolean, default=False)
+    is_deleted = Column(Boolean, default=False)
+    is_archived = Column(Boolean, default=False)
     
+    # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     user = relationship("User", back_populates="emails")
+
+class SenderFlag(Base):
+    """Track flagged senders and their risk levels"""
+    __tablename__ = "sender_flags"
     
-    def __init__(self, user_id: str, gmail_id: str, **kwargs):
-        self.user_id = user_id
-        self.gmail_id = gmail_id
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    sender = Column(String(500), nullable=False)
+    
+    # Flag details
+    flag_type = Column(String(20))  # whitelist, blacklist, spam
+    risk_level = Column(String(20))  # low, medium, high
+    confidence = Column(Float)  # How confident we are in this flag
+    
+    # Statistics
+    total_emails = Column(Integer, default=0)
+    spam_emails = Column(Integer, default=0)
+    spam_ratio = Column(Float, default=0.0)
+    
+    # Timestamps
+    first_seen = Column(DateTime)
+    last_seen = Column(DateTime)
+    flagged_at = Column(DateTime, default=datetime.utcnow)
+    
+    # User action
+    user_confirmed = Column(Boolean, default=False)  # User manually confirmed this flag
+    
+    # Relationships
+    user = relationship("User", back_populates="sender_flags")
+
+# Removed BulkOperation - keeping it simple with direct email operations
