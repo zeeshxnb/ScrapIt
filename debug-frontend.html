@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Frontend</title>
+</head>
+<body>
+    <h1>Frontend Debug Test</h1>
+    <div id="test-results"></div>
+    
+    <script>
+        async function testFrontend() {
+            const results = document.getElementById('test-results');
+            
+            try {
+                // Test 1: Can we reach the frontend HTML?
+                const htmlResponse = await fetch('http://localhost:3000');
+                const htmlText = await htmlResponse.text();
+                
+                results.innerHTML += `<p>✅ Frontend HTML loads (${htmlText.length} chars)</p>`;
+                
+                // Test 2: Can we reach the JS bundle?
+                const jsResponse = await fetch('http://localhost:3000/static/js/bundle.js');
+                const jsText = await jsResponse.text();
+                
+                results.innerHTML += `<p>✅ JS Bundle loads (${jsText.length} chars)</p>`;
+                
+                // Test 3: Check if React is in the bundle
+                if (jsText.includes('React')) {
+                    results.innerHTML += `<p>✅ React found in bundle</p>`;
+                } else {
+                    results.innerHTML += `<p>❌ React NOT found in bundle</p>`;
+                }
+                
+                // Test 4: Try to make API call like React would
+                const apiResponse = await fetch('http://localhost:3000/auth/google');
+                const apiData = await apiResponse.json();
+                
+                if (apiData.auth_url) {
+                    results.innerHTML += `<p>✅ API proxy working - got auth_url</p>`;
+                } else {
+                    results.innerHTML += `<p>❌ API proxy not working</p>`;
+                }
+                
+            } catch (error) {
+                results.innerHTML += `<p>❌ Error: ${error.message}</p>`;
+            }
+        }
+        
+        // Run test when page loads
+        testFrontend();
+    </script>
+</body>
+</html>

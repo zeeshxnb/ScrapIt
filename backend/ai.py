@@ -45,7 +45,7 @@ def classify_email(email: Email) -> dict:
         """
         
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+            model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
             messages=[{"role": "user", "content": prompt}],
             max_tokens=150,
             temperature=0.1

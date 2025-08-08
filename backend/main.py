@@ -1,8 +1,13 @@
 """
 ScrapIt - Main Application Entry Point
 """
+import os
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Load environment variables
+load_dotenv()
 
 # Import modules
 from auth import auth_router
@@ -19,7 +24,7 @@ app = FastAPI(
 # Add CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "file://", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

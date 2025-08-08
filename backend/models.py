@@ -31,7 +31,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False)
     google_id = Column(String(255), unique=True, nullable=False)
     access_token = Column(Text)  # Encrypted
-    refresh_token = Column(Text)  # Encrypted
+    refresh_token = Column(Text, nullable=True)  # Encrypted
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships

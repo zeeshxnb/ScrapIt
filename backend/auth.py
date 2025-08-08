@@ -52,9 +52,10 @@ def get_google_auth_url() -> str:
     
     flow = Flow.from_client_config(
         client_config,
-        scopes=['https://www.googleapis.com/auth/gmail.readonly',
-                'https://www.googleapis.com/auth/gmail.modify',
-                'https://www.googleapis.com/auth/userinfo.email'],
+        scopes=['https://www.googleapis.com/auth/userinfo.email',
+                'openid',
+                'https://www.googleapis.com/auth/gmail.readonly',
+                'https://www.googleapis.com/auth/gmail.modify'],
         redirect_uri=REDIRECT_URI
     )
     
@@ -75,9 +76,10 @@ def exchange_code_for_tokens(code: str) -> dict:
     
     flow = Flow.from_client_config(
         client_config,
-        scopes=['https://www.googleapis.com/auth/gmail.readonly',
-                'https://www.googleapis.com/auth/gmail.modify',
-                'https://www.googleapis.com/auth/userinfo.email'],
+        scopes=['https://www.googleapis.com/auth/userinfo.email',
+                'openid',
+                'https://www.googleapis.com/auth/gmail.readonly',
+                'https://www.googleapis.com/auth/gmail.modify'],
         redirect_uri=REDIRECT_URI
     )
     
@@ -119,6 +121,13 @@ async def google_auth():
     auth_url = get_google_auth_url()
     return {"auth_url": auth_url}
 
+@router.get("/google-redirect")
+async def google_auth_redirect():
+    """Direct redirect to Google OAuth"""
+    from fastapi.responses import RedirectResponse
+    auth_url = get_google_auth_url()
+    return RedirectResponse(url=auth_url)
+
 @router.get("/callback")
 async def google_callback(code: str, db: Session = Depends(get_db)):
     """Handle Google OAuth callback"""
@@ -138,20 +147,21 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         
         # Update tokens
         user.set_access_token(token_data['access_token'])
-        user.set_refresh_token(token_data['refresh_token'])
+        if token_data.get('refresh_token'):
+            user.set_refresh_token(token_data['refresh_token'])
         db.commit()
         
         # Create JWT
         jwt_token = create_jwt_token(str(user.id))
         
-        return {
-            "access_token": jwt_token,
-            "token_type": "bearer",
-            "user_email": user.email
-        }
+        # Redirect to frontend with token
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=f"http://localhost:3000/?token={jwt_token}")
         
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # Redirect to frontend with error
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=f"http://localhost:3000/login?error={str(e)}")
 
 @router.get("/me")
 async def get_user_info(current_user: User = Depends(get_current_user)):

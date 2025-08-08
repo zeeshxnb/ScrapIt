@@ -232,7 +232,7 @@ Just ask me naturally - I understand conversational language!"""
         # Use AI for general conversation
         try:
             response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+                model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
                 messages=[
                     {"role": "system", "content": system_context},
                     {"role": "user", "content": message}

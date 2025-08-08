@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Email, EmailSummary, EmailContextType, EmailFetchParams, EmailFilters } from '../types';
 import { gmailApi, aiApi, chatApi } from '../services/api';
 import toast from 'react-hot-toast';
@@ -30,9 +30,8 @@ export const EmailProvider: React.FC<EmailProviderProps> = ({ children }) => {
       const emailData = await gmailApi.getEmails(params);
       setEmails(emailData);
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Failed to fetch emails';
-      setError(errorMessage);
-      toast.error(errorMessage);
+      setError(err.message || 'Failed to fetch emails');
+      toast.error('Failed to fetch emails');
     } finally {
       setIsLoading(false);
     }
@@ -40,33 +39,29 @@ export const EmailProvider: React.FC<EmailProviderProps> = ({ children }) => {
 
   const fetchSummary = async () => {
     try {
+      setIsLoading(true);
+      setError(null);
       const summaryData = await chatApi.getSummary();
       setSummary(summaryData);
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Failed to fetch email summary';
-      setError(errorMessage);
-      console.error('Failed to fetch summary:', err);
+      setError(err.message || 'Failed to fetch summary');
+      toast.error('Failed to fetch email summary');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const syncEmails = async () => {
     try {
       setIsLoading(true);
-      toast.loading('Syncing emails from Gmail...', { id: 'sync' });
-      
+      setError(null);
       await gmailApi.syncEmails();
-      
+      toast.success('Emails synced successfully');
       // Refresh data after sync
-      await Promise.all([
-        fetchEmails(),
-        fetchSummary()
-      ]);
-      
-      toast.success('Emails synced successfully!', { id: 'sync' });
+      await Promise.all([fetchEmails(), fetchSummary()]);
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Failed to sync emails';
-      toast.error(errorMessage, { id: 'sync' });
-      setError(errorMessage);
+      setError(err.message || 'Failed to sync emails');
+      toast.error('Failed to sync emails');
     } finally {
       setIsLoading(false);
     }
@@ -75,21 +70,14 @@ export const EmailProvider: React.FC<EmailProviderProps> = ({ children }) => {
   const classifyEmails = async () => {
     try {
       setIsLoading(true);
-      toast.loading('Classifying emails with AI...', { id: 'classify' });
-      
-      await aiApi.classifyEmails();
-      
+      setError(null);
+      const result = await aiApi.classifyEmails();
+      toast.success(`Classified ${result.processed || 0} emails`);
       // Refresh data after classification
-      await Promise.all([
-        fetchEmails(),
-        fetchSummary()
-      ]);
-      
-      toast.success('Emails classified successfully!', { id: 'classify' });
+      await Promise.all([fetchEmails(), fetchSummary()]);
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Failed to classify emails';
-      toast.error(errorMessage, { id: 'classify' });
-      setError(errorMessage);
+      setError(err.message || 'Failed to classify emails');
+      toast.error('Failed to classify emails');
     } finally {
       setIsLoading(false);
     }
@@ -98,22 +86,14 @@ export const EmailProvider: React.FC<EmailProviderProps> = ({ children }) => {
   const deleteSpamEmails = async () => {
     try {
       setIsLoading(true);
-      toast.loading('Deleting spam emails...', { id: 'delete-spam' });
-      
+      setError(null);
       const result = await aiApi.deleteSpamEmails();
-      
+      toast.success(`Deleted ${result.deleted_count || 0} spam emails`);
       // Refresh data after deletion
-      await Promise.all([
-        fetchEmails(),
-        fetchSummary()
-      ]);
-      
-      const deletedCount = result.deleted_count || 0;
-      toast.success(`Deleted ${deletedCount} spam emails!`, { id: 'delete-spam' });
+      await Promise.all([fetchEmails(), fetchSummary()]);
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Failed to delete spam emails';
-      toast.error(errorMessage, { id: 'delete-spam' });
-      setError(errorMessage);
+      setError(err.message || 'Failed to delete spam emails');
+      toast.error('Failed to delete spam emails');
     } finally {
       setIsLoading(false);
     }
@@ -121,12 +101,13 @@ export const EmailProvider: React.FC<EmailProviderProps> = ({ children }) => {
 
   const searchEmails = async (query: string, filters: EmailFilters = {}): Promise<Email[]> => {
     try {
+      setError(null);
       const results = await chatApi.searchEmails(query, filters);
       return results;
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Failed to search emails';
-      toast.error(errorMessage);
-      throw err;
+      setError(err.message || 'Failed to search emails');
+      toast.error('Failed to search emails');
+      return [];
     }
   };
 

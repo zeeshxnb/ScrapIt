@@ -43,8 +43,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async () => {
     try {
-      const { auth_url } = await authApi.getGoogleAuthUrl();
-      window.location.href = auth_url;
+      // Use the direct redirect endpoint instead of the JSON endpoint
+      window.location.href = 'http://localhost:8000/auth/google-redirect';
     } catch (error) {
       console.error('Login failed:', error);
       toast.error('Failed to start login process');

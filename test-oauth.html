@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Google OAuth</title>
+</head>
+<body>
+    <h1>Test Google OAuth</h1>
+    <button onclick="testOAuth()">Test Google OAuth</button>
+    <div id="result"></div>
+
+    <script>
+        async function testOAuth() {
+            try {
+                console.log('Fetching auth URL...');
+                const response = await fetch('http://localhost:8000/auth/google');
+                const data = await response.json();
+                console.log('Auth URL:', data.auth_url);
+                
+                document.getElementById('result').innerHTML = 
+                    `<p>Auth URL: <a href="${data.auth_url}" target="_blank">${data.auth_url}</a></p>`;
+                
+                // Automatically redirect
+                window.location.href = data.auth_url;
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -7,7 +7,7 @@ import {
   ChartBarIcon,
   ClockIcon,
 } from '@heroicons/react/24/outline';
-import { useEmail } from '../hooks';
+import { useEmail } from '../contexts/EmailContext';
 import { chatApi } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { QuickAction } from '../types';
