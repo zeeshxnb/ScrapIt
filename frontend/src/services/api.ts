@@ -53,8 +53,12 @@ export const authApi = {
 
 // Gmail API
 export const gmailApi = {
-  syncEmails: async () => {
-    const response = await api.post('/gmail/sync');
+  syncEmails: async (options: { incremental?: boolean; maxResults?: number; batchSize?: number } = {}) => {
+    const response = await api.post('/gmail/sync', {
+      incremental: options.incremental ?? false,  // Default to full sync
+      max_results: options.maxResults ?? null,    // No limits
+      batch_size: options.batchSize ?? 100
+    });
     return response.data;
   },
 

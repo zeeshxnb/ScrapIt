@@ -6,15 +6,14 @@ Simple startup script for development
 import uvicorn
 
 if __name__ == "__main__":
-    print("🚀 Starting ScrapIt server...")
-    print("📖 API Docs: http://localhost:8000/docs")
-    print("🔍 Health: http://localhost:8000/health")
-    print("\nPress Ctrl+C to stop")
+    print("🚀 ScrapIt server starting on http://localhost:8000")
+    print("📖 Docs: http://localhost:8000/docs | Press Ctrl+C to stop")
     
     uvicorn.run(
         "main:app", 
         host="0.0.0.0", 
         port=8000, 
         reload=True,
-        log_level="info"
+        log_level="warning",  # Reduced logging
+        access_log=False      # Disable access logs
     )

@@ -69,8 +69,14 @@ function SimpleDashboard() {
       const response = await fetch('http://localhost:8000/gmail/sync', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          incremental: false,  // Full sync to get ALL emails
+          max_results: null,   // No limits
+          batch_size: 100
+        })
       });
       
       if (response.ok) {

@@ -59,7 +59,11 @@ def get_google_auth_url() -> str:
         redirect_uri=REDIRECT_URI
     )
     
-    auth_url, _ = flow.authorization_url(access_type='offline')
+    # Force fresh consent to get refresh token
+    auth_url, _ = flow.authorization_url(
+        access_type='offline',
+        prompt='consent'  # This forces Google to show consent screen and provide refresh token
+    )
     return auth_url
 
 def exchange_code_for_tokens(code: str) -> dict:
@@ -83,6 +87,7 @@ def exchange_code_for_tokens(code: str) -> dict:
         redirect_uri=REDIRECT_URI
     )
     
+    # Force access_type=offline to get refresh token
     flow.fetch_token(code=code)
     credentials = flow.credentials
     
@@ -115,6 +120,12 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)) -> U
     return user
 
 # Routes
+@router.get("/login")
+async def login():
+    """Start Google OAuth - alias for /google"""
+    auth_url = get_google_auth_url()
+    return {"auth_url": auth_url}
+
 @router.get("/google")
 async def google_auth():
     """Start Google OAuth"""
@@ -163,6 +174,48 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url=f"http://localhost:3000/login?error={str(e)}")
 
+@router.post("/callback")
+async def google_callback_post(request: dict, db: Session = Depends(get_db)):
+    """Handle Google OAuth callback via POST (for testing)"""
+    try:
+        code = request.get('code')
+        if not code:
+            raise HTTPException(status_code=400, detail="No code provided")
+            
+        token_data = exchange_code_for_tokens(code)
+        user_info = token_data['user_info']
+        
+        # Find or create user
+        user = db.query(User).filter(User.google_id == user_info['id']).first()
+        
+        if not user:
+            user = User(
+                email=user_info['email'],
+                google_id=user_info['id']
+            )
+            db.add(user)
+        
+        # Update tokens
+        user.set_access_token(token_data['access_token'])
+        if token_data.get('refresh_token'):
+            user.set_refresh_token(token_data['refresh_token'])
+        db.commit()
+        
+        # Create JWT
+        jwt_token = create_jwt_token(str(user.id))
+        
+        return {
+            "success": True,
+            "token": jwt_token,
+            "user": {
+                "id": str(user.id),
+                "email": user.email
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @router.get("/me")
 async def get_user_info(current_user: User = Depends(get_current_user)):
     """Get current user info"""
@@ -170,6 +223,18 @@ async def get_user_info(current_user: User = Depends(get_current_user)):
         "id": str(current_user.id),
         "email": current_user.email,
         "created_at": current_user.created_at.isoformat()
+    }
+
+@router.get("/test-token")
+async def test_token(current_user: User = Depends(get_current_user)):
+    """Test if token is working"""
+    return {
+        "success": True,
+        "message": "Token is valid!",
+        "user": {
+            "id": str(current_user.id),
+            "email": current_user.email
+        }
     }
 
 @router.delete("/logout")

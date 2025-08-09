@@ -1,8 +1,8 @@
 import React from 'react';
-import SimpleDashboard from './SimpleDashboard.tsx';
+import BeautifulApp from './BeautifulApp.tsx';
 
 function App() {
-  return <SimpleDashboard />;
+  return <BeautifulApp />;
 }
 
 export default App;
