@@ -4,12 +4,13 @@ import {
   EnvelopeIcon,
   ExclamationTriangleIcon,
   ClockIcon,
-  TrendingUpIcon,
-  TrendingDownIcon,
+  ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon,
   CalendarIcon,
 } from '@heroicons/react/24/outline';
-import { useEmail } from '../contexts/EmailContext';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { useEmail } from '../contexts/EmailContext.tsx';
+import { analyticsApi } from '../services/api.ts';
+import LoadingSpinner from '../components/LoadingSpinner.tsx';
 import {
   BarChart,
   Bar,
@@ -30,40 +31,62 @@ import {
 const AnalyticsPage: React.FC = () => {
   const { summary, fetchSummary, isLoading } = useEmail();
   const [timeRange, setTimeRange] = useState('7d');
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
   useEffect(() => {
+    console.log('🚀 AnalyticsPage mounted');
     fetchSummary();
+    loadAnalyticsData();
   }, []);
 
-  // Mock data for charts (in real app, this would come from API)
-  const categoryData = summary?.categories ? 
-    Object.entries(summary.categories).map(([name, value]) => ({
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      value,
-      percentage: Math.round((value / summary.total) * 100)
-    })) : [];
+  // Keep analytics in sync when global summary changes (e.g., after Dashboard actions)
+  useEffect(() => {
+    if (summary) {
+      loadAnalyticsData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summary]);
 
-  const emailVolumeData = [
-    { date: '2024-01-01', emails: 45, spam: 3 },
-    { date: '2024-01-02', emails: 52, spam: 5 },
-    { date: '2024-01-03', emails: 38, spam: 2 },
-    { date: '2024-01-04', emails: 61, spam: 8 },
-    { date: '2024-01-05', emails: 43, spam: 4 },
-    { date: '2024-01-06', emails: 29, spam: 1 },
-    { date: '2024-01-07', emails: 67, spam: 6 },
-  ];
+  useEffect(() => {
+    loadAnalyticsData();
+  }, [timeRange]);
 
-  const senderData = summary?.recent_senders?.slice(0, 10).map(sender => ({
-    name: sender.sender.length > 20 ? sender.sender.substring(0, 20) + '...' : sender.sender,
-    emails: sender.count
-  })) || [];
+  const loadAnalyticsData = async () => {
+    try {
+      setLoadingAnalytics(true);
+      console.log('🔄 Loading analytics data...');
+      const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365;
+      
+      console.log(`📊 Fetching analytics for ${days} days`);
+      const [overview, activity] = await Promise.all([
+        analyticsApi.getOverview(days),
+        analyticsApi.getActivity(10)
+      ]);
+      
+      console.log('✅ Analytics data loaded:', { overview, activity });
+      setAnalyticsData(overview);
+      setRecentActivity(activity.activities || []);
+    } catch (error) {
+      console.error('❌ Failed to load analytics data:', error);
+      console.error('Error details:', error.response?.data || error.message);
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  };
+
+  // Use real analytics data
+  const categoryData = analyticsData?.categories || [];
+  const emailVolumeData = analyticsData?.time_series?.daily_volume || [];
+  const senderData = analyticsData?.top_senders || [];
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
   const stats = [
     {
       name: 'Total Emails',
-      value: summary?.total || 0,
+      value: analyticsData?.summary?.total_emails || summary?.total || 0,
       change: '+12%',
       changeType: 'increase',
       icon: EnvelopeIcon,
@@ -72,7 +95,7 @@ const AnalyticsPage: React.FC = () => {
     },
     {
       name: 'Spam Detected',
-      value: summary?.spam || 0,
+      value: analyticsData?.summary?.spam_emails || summary?.spam || 0,
       change: '-8%',
       changeType: 'decrease',
       icon: ExclamationTriangleIcon,
@@ -81,7 +104,7 @@ const AnalyticsPage: React.FC = () => {
     },
     {
       name: 'Processing Rate',
-      value: summary ? `${Math.round(((summary.total - summary.unprocessed) / summary.total) * 100)}%` : '0%',
+      value: `${analyticsData?.summary?.processing_rate || 0}%`,
       change: '+5%',
       changeType: 'increase',
       icon: ChartBarIcon,
@@ -90,7 +113,7 @@ const AnalyticsPage: React.FC = () => {
     },
     {
       name: 'Avg Daily Emails',
-      value: Math.round((summary?.total || 0) / 30),
+      value: analyticsData?.summary?.avg_daily_emails || 0,
       change: '+3%',
       changeType: 'increase',
       icon: CalendarIcon,
@@ -99,7 +122,7 @@ const AnalyticsPage: React.FC = () => {
     },
   ];
 
-  if (isLoading && !summary) {
+  if ((isLoading && !summary) || (loadingAnalytics && !analyticsData)) {
     return (
       <div className="flex items-center justify-center h-64">
         <LoadingSpinner size="large" />
@@ -109,14 +132,35 @@ const AnalyticsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Debug Info */}
+      {loadingAnalytics && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p className="text-blue-800 text-sm">🔄 Loading analytics data...</p>
+        </div>
+      )}
+      
+      {!analyticsData && !loadingAnalytics && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+          <p className="text-yellow-800 text-sm">⚠️ No analytics data loaded. Check console for errors.</p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
           <p className="text-gray-600">Insights into your email patterns and management</p>
+          <p className="text-xs text-gray-400">Last updated: {new Date().toLocaleTimeString()}</p>
         </div>
         
         <div className="flex items-center space-x-3">
+          <button
+            onClick={loadAnalyticsData}
+            disabled={loadingAnalytics}
+            className="btn btn-secondary"
+          >
+            {loadingAnalytics ? 'Loading...' : 'Refresh Analytics'}
+          </button>
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
@@ -134,7 +178,7 @@ const AnalyticsPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat) => {
           const Icon = stat.icon;
-          const TrendIcon = stat.changeType === 'increase' ? TrendingUpIcon : TrendingDownIcon;
+          const TrendIcon = stat.changeType === 'increase' ? ArrowTrendingUpIcon : ArrowTrendingDownIcon;
           return (
             <div key={stat.name} className="card">
               <div className="flex items-center justify-between">
@@ -239,40 +283,40 @@ const AnalyticsPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Processed</span>
               <span className="text-sm font-medium">
-                {summary ? summary.total - summary.unprocessed : 0}
+                {analyticsData?.summary ? analyticsData.summary.total_emails - analyticsData.summary.unprocessed_emails : 0}
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
                 className="bg-green-600 h-2 rounded-full" 
                 style={{ 
-                  width: summary ? `${((summary.total - summary.unprocessed) / summary.total) * 100}%` : '0%' 
+                  width: `${analyticsData?.summary?.processing_rate || 0}%`
                 }}
               />
             </div>
             
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Unprocessed</span>
-              <span className="text-sm font-medium">{summary?.unprocessed || 0}</span>
+              <span className="text-sm font-medium">{analyticsData?.summary?.unprocessed_emails || 0}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
                 className="bg-yellow-600 h-2 rounded-full" 
                 style={{ 
-                  width: summary ? `${(summary.unprocessed / summary.total) * 100}%` : '0%' 
+                  width: `${100 - (analyticsData?.summary?.processing_rate || 0)}%`
                 }}
               />
             </div>
             
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Spam Detected</span>
-              <span className="text-sm font-medium">{summary?.spam || 0}</span>
+              <span className="text-sm font-medium">{analyticsData?.summary?.spam_emails || 0}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
                 className="bg-red-600 h-2 rounded-full" 
                 style={{ 
-                  width: summary ? `${(summary.spam / summary.total) * 100}%` : '0%' 
+                  width: `${analyticsData?.summary?.spam_detection_rate || 0}%`
                 }}
               />
             </div>
@@ -285,19 +329,19 @@ const AnalyticsPage: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Peak Email Hour</span>
-              <span className="text-sm font-medium">9:00 AM</span>
+              <span className="text-sm font-medium">{analyticsData?.insights?.peak_email_hour || '9:00 AM'}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Busiest Day</span>
-              <span className="text-sm font-medium">Tuesday</span>
+              <span className="text-sm font-medium">{analyticsData?.insights?.busiest_day || 'Tuesday'}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Avg Response Time</span>
-              <span className="text-sm font-medium">2.3 hours</span>
+              <span className="text-sm font-medium">{analyticsData?.insights?.avg_response_time || '2.3 hours'}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Weekend Emails</span>
-              <span className="text-sm font-medium">12%</span>
+              <span className="text-sm font-medium">{analyticsData?.insights?.weekend_percentage || 12}%</span>
             </div>
           </div>
         </div>
@@ -307,12 +351,12 @@ const AnalyticsPage: React.FC = () => {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Cleanup Efficiency</h3>
           <div className="space-y-4">
             <div className="text-center">
-              <div className="text-3xl font-bold text-green-600 mb-1">94%</div>
+              <div className="text-3xl font-bold text-green-600 mb-1">{analyticsData?.efficiency?.spam_detection_accuracy || 94}%</div>
               <div className="text-sm text-gray-600">Spam Detection Accuracy</div>
             </div>
             
             <div className="text-center">
-              <div className="text-3xl font-bold text-blue-600 mb-1">87%</div>
+              <div className="text-3xl font-bold text-blue-600 mb-1">{analyticsData?.efficiency?.processing_accuracy || 87}%</div>
               <div className="text-sm text-gray-600">Classification Accuracy</div>
             </div>
             
@@ -328,21 +372,21 @@ const AnalyticsPage: React.FC = () => {
       <div className="card">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
         <div className="space-y-3">
-          <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span className="text-sm text-gray-900">Classified 45 emails as "Work"</span>
-            <span className="text-xs text-gray-500 ml-auto">2 hours ago</span>
-          </div>
-          <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-            <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-            <span className="text-sm text-gray-900">Deleted 12 spam emails</span>
-            <span className="text-xs text-gray-500 ml-auto">4 hours ago</span>
-          </div>
-          <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-            <span className="text-sm text-gray-900">Synced 67 new emails from Gmail</span>
-            <span className="text-xs text-gray-500 ml-auto">6 hours ago</span>
-          </div>
+          {recentActivity.length > 0 ? recentActivity.map((activity, index) => (
+            <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+              <div className={`w-2 h-2 rounded-full ${
+                activity.type === 'spam_deleted' ? 'bg-red-500' : 
+                activity.type === 'classified' ? 'bg-green-500' : 'bg-blue-500'
+              }`}></div>
+              <span className="text-sm text-gray-900">{activity.description}</span>
+              <span className="text-xs text-gray-500 ml-auto">{activity.time_ago}</span>
+            </div>
+          )) : (
+            <div className="text-center py-8 text-gray-500">
+              <p>No recent activity</p>
+              <p className="text-sm">Process some emails to see activity here</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

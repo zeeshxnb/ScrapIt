@@ -1,8 +1,8 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { SparklesIcon, ShieldCheckIcon, BoltIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
-import { useAuth } from '../contexts/AuthContext';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { useAuth } from '../contexts/AuthContext.tsx';
+import LoadingSpinner from '../components/LoadingSpinner.tsx';
 
 const LoginPage: React.FC = () => {
   const { login, isAuthenticated, isLoading } = useAuth();

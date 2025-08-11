@@ -14,6 +14,7 @@ from auth import auth_router
 from gmail import gmail_router  
 from ai import ai_router
 from chatbot import chatbot_router
+from analytics import router as analytics_router
 
 app = FastAPI(
     title="ScrapIt - Email Cleaner",
@@ -24,7 +25,7 @@ app = FastAPI(
 # Add CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "file://", "*"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "file://", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,6 +36,7 @@ app.include_router(auth_router, prefix="/auth", tags=["authentication"])
 app.include_router(gmail_router, prefix="/gmail", tags=["gmail"])
 app.include_router(ai_router, prefix="/ai", tags=["ai"])
 app.include_router(chatbot_router, prefix="/chat", tags=["chatbot"])
+app.include_router(analytics_router, prefix="/analytics", tags=["analytics"])
 
 @app.get("/")
 async def root():

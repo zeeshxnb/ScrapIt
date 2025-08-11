@@ -7,6 +7,8 @@ import time
 import email.utils
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from typing import Optional, List
 from sqlalchemy.orm import Session
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
@@ -126,9 +128,8 @@ class GmailService:
                 userId='me',
                 id=message_id
             ).execute()
-            
-            # Minimal delay to respect rate limits
-            time.sleep(0.02)
+            # Very small delay to respect rate limits
+            time.sleep(0.005)
             
             # Extract headers
             headers = {}
@@ -153,7 +154,7 @@ class GmailService:
         except Exception:
             return None
     
-    def sync_emails(self, db: Session, max_results: int = None, incremental: bool = False, batch_size: int = 100, specific_labels: list = None) -> dict:
+    def sync_emails(self, db: Session, max_results: int = None, incremental: bool = False, batch_size: int = 100, specific_labels: list = None, only_inbox: bool = True) -> dict:
         """Enhanced email sync with full Gmail access - gets ALL emails from ALL folders/labels"""
         if not self.authenticate():
             return {"success": False, "error": "Authentication failed"}
@@ -166,24 +167,20 @@ class GmailService:
                 query = " OR ".join(label_queries)
                 print(f"Syncing specific labels: {specific_labels}")
             else:
-                # Get ALL emails from ALL folders/labels (not just inbox)
-                # This includes: inbox, sent, drafts, spam, trash, and all custom labels
-                query = "in:anywhere"  # This gets emails from ALL locations
-                print("Syncing ALL folders/labels (inbox, sent, drafts, spam, trash, custom labels)")
+                # Default: only sync INBOX for speed and expected counts
+                query = "in:inbox" if only_inbox else "in:anywhere"
+                print("Sync scope:", "INBOX only" if only_inbox else "ALL folders/labels")
             
             # For incremental sync, add date filter
             if incremental:
                 latest_email = db.query(Email).filter(
-                    Email.user_id == str(self.user.id)
+                    Email.user_id == self.user.id
                 ).order_by(Email.received_date.desc()).first()
                 
                 if latest_email and latest_email.received_date:
                     # Get emails after the latest one we have
                     after_date = latest_email.received_date.strftime("%Y/%m/%d")
-                    if specific_labels:
-                        query = f"({query}) after:{after_date}"
-                    else:
-                        query = f"in:anywhere after:{after_date}"
+                    query = f"{query} after:{after_date}"
             
             print(f"🔍 Query: '{query}'")
             print(f"📊 Max results: {max_results if max_results else 'UNLIMITED'}")
@@ -219,7 +216,7 @@ class GmailService:
                         # Check if email already exists (prevent duplicates)
                         existing = db.query(Email).filter(
                             Email.gmail_id == msg['id'],
-                            Email.user_id == str(self.user.id)
+                            Email.user_id == self.user.id
                         ).first()
                         
                         # Skip if already exists and this is a full sync (avoid duplicates)
@@ -256,7 +253,7 @@ class GmailService:
                         else:
                             # Create new email record
                             email_record = Email(
-                                user_id=str(self.user.id),
+                                user_id=self.user.id,
                                 gmail_id=email_data['id'],
                                 subject=email_data['subject'] or '(No Subject)',
                                 sender=self.extract_email_address(email_data['from']),
@@ -292,7 +289,7 @@ class GmailService:
             print(f"\n✅ Sync completed: {new_count} new, {updated_count} updated, {error_count} errors")
             
             # Validate final count
-            final_count = db.query(Email).filter(Email.user_id == str(self.user.id)).count()
+            final_count = db.query(Email).filter(Email.user_id == self.user.id).count()
             print(f"📊 Database now contains: {final_count} emails")
             
             return {
@@ -442,33 +439,40 @@ class GmailService:
             return {"success": False, "error": str(e)}
 
 # Routes
+class SyncRequest(BaseModel):
+    max_results: Optional[int] = None
+    incremental: bool = True
+    batch_size: int = 100
+    only_inbox: bool = True
+    labels: Optional[List[str]] = None
+
 @router.post("/sync")
 async def sync_emails(
-    max_results: int = None,  # No limit by default - gets ALL emails
-    incremental: bool = False,  # Default to FULL sync to get ALL emails
-    batch_size: int = 100,
-    force_refresh: bool = False,  # Force fresh data from Gmail
+    body: SyncRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Enhanced email sync from Gmail - NO LIMITS, gets ALL emails from ALL folders"""
-    
-    # Validate batch_size
-    if batch_size > 500:
-        batch_size = 500
-    elif batch_size < 10:
-        batch_size = 10
-    
+    """Fast, sensible sync defaults: incremental INBOX by default."""
+
+    batch_size = max(10, min(500, body.batch_size))
+
     gmail_service = GmailService(current_user)
-    result = gmail_service.sync_emails(db, max_results, incremental, batch_size)
-    
+    result = gmail_service.sync_emails(
+        db,
+        max_results=body.max_results,
+        incremental=body.incremental,
+        batch_size=batch_size,
+        specific_labels=body.labels,
+        only_inbox=body.only_inbox if not body.labels else False,
+    )
+
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["error"])
-    
+
     sync_message = f"Sync completed: {result['new_emails']} new, {result['updated_emails']} updated"
     if result.get('total_batches'):
         sync_message += f" (processed in {result['total_batches']} batches)"
-    
+
     return {
         "message": sync_message,
         **result

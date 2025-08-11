@@ -5,8 +5,8 @@ import {
   UserCircleIcon,
   ChevronDownIcon,
 } from '@heroicons/react/24/outline';
-import { useAuth } from '../contexts/AuthContext';
-import { useEmail } from '../contexts/EmailContext';
+import { useAuth } from '../contexts/AuthContext.tsx';
+import { useEmail } from '../contexts/EmailContext.tsx';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();

@@ -8,7 +8,7 @@ import {
   Cog6ToothIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline';
-import { useEmail } from '../contexts/EmailContext';
+import { useEmail } from '../contexts/EmailContext.tsx';
 
 const Sidebar: React.FC = () => {
   const { summary } = useEmail();

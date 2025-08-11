@@ -10,8 +10,8 @@ import {
   MoonIcon,
   SunIcon,
 } from '@heroicons/react/24/outline';
-import { useAuth } from '../contexts/AuthContext';
-import { useEmail } from '../contexts/EmailContext';
+import { useAuth } from '../contexts/AuthContext.tsx';
+import { useEmail } from '../contexts/EmailContext.tsx';
 import toast from 'react-hot-toast';
 
 const SettingsPage: React.FC = () => {

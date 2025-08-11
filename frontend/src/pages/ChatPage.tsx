@@ -7,9 +7,9 @@ import {
   ChartBarIcon,
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';
-import { chatApi } from '../services/api';
-import { useEmail } from '../contexts/EmailContext';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { chatApi } from '../services/api.ts';
+import { useEmail } from '../contexts/EmailContext.tsx';
+import LoadingSpinner from '../components/LoadingSpinner.tsx';
 
 interface ChatMessage {
   id: string;

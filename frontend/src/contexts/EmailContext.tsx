@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Email, EmailSummary, EmailContextType, EmailFetchParams, EmailFilters } from '../types';
-import { gmailApi, aiApi, chatApi } from '../services/api';
+import { gmailApi, aiApi, chatApi } from '../services/api.ts';
 import toast from 'react-hot-toast';
 
 const EmailContext = createContext<EmailContextType | undefined>(undefined);

@@ -9,9 +9,9 @@ import {
   ExclamationTriangleIcon,
   ClockIcon,
 } from '@heroicons/react/24/outline';
-import { useEmail } from '../contexts/EmailContext';
+import { useEmail } from '../contexts/EmailContext.tsx';
 import { Email } from '../types';
-import LoadingSpinner from '../components/LoadingSpinner';
+import LoadingSpinner from '../components/LoadingSpinner.tsx';
 
 const EmailsPage: React.FC = () => {
   const { emails, fetchEmails, isLoading, deleteSpamEmails } = useEmail();

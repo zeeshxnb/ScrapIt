@@ -53,11 +53,13 @@ export const authApi = {
 
 // Gmail API
 export const gmailApi = {
-  syncEmails: async (options: { incremental?: boolean; maxResults?: number; batchSize?: number } = {}) => {
+  syncEmails: async (options: { incremental?: boolean; maxResults?: number; batchSize?: number; onlyInbox?: boolean; labels?: string[] } = {}) => {
     const response = await api.post('/gmail/sync', {
-      incremental: options.incremental ?? false,  // Default to full sync
-      max_results: options.maxResults ?? null,    // No limits
-      batch_size: options.batchSize ?? 100
+      incremental: options.incremental ?? true,
+      max_results: options.maxResults ?? null,
+      batch_size: options.batchSize ?? 100,
+      only_inbox: options.onlyInbox ?? true,
+      labels: options.labels ?? null,
     });
     return response.data;
   },
@@ -126,6 +128,24 @@ export const chatApi = {
 
   getQuickActions: async () => {
     const response = await api.get('/chat/quick-actions');
+    return response.data;
+  },
+};
+
+// Analytics API
+export const analyticsApi = {
+  getOverview: async (days: number = 7) => {
+    const response = await api.get(`/analytics/overview?days=${days}`);
+    return response.data;
+  },
+
+  getTrends: async (period: string = '30d') => {
+    const response = await api.get(`/analytics/trends?period=${period}`);
+    return response.data;
+  },
+
+  getActivity: async (limit: number = 10) => {
+    const response = await api.get(`/analytics/activity?limit=${limit}`);
     return response.data;
   },
 };

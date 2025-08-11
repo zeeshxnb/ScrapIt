@@ -7,9 +7,9 @@ import {
   ChartBarIcon,
   ClockIcon,
 } from '@heroicons/react/24/outline';
-import { useEmail } from '../contexts/EmailContext';
-import { chatApi } from '../services/api';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { useEmail } from '../contexts/EmailContext.tsx';
+import { chatApi } from '../services/api.ts';
+import LoadingSpinner from '../components/LoadingSpinner.tsx';
 import { QuickAction } from '../types';
 
 const Dashboard: React.FC = () => {
@@ -98,6 +98,7 @@ const Dashboard: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-gray-600">Overview of your email management</p>
+        <p className="text-xs text-red-500">TEST: {new Date().toLocaleTimeString()}</p>
       </div>
 
       {/* Stats Grid */}
