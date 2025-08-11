@@ -1,17 +1,17 @@
-# 🚀 ScrapIt - AI-Powered Email Cleaner
+# ScrapIt - AI-Powered Email Cleaner
 
 Clean your inbox in minutes, not hours. ScrapIt uses AI to automatically classify, organize, and clean your emails with natural language commands.
 
-## ✨ Features
+## Features
 
-- **🤖 AI Classification** - Automatically categorize emails using OpenAI
-- **🗑️ Smart Spam Detection** - Identify and remove spam with high accuracy  
-- **💬 Natural Language Chat** - Manage emails by talking to AI assistant
-- **📊 Analytics Dashboard** - Insights into your email patterns
-- **🔄 Gmail Integration** - Seamless sync with your Gmail account
-- **⚡ Bulk Operations** - Clean thousands of emails with one click
+* **AI Classification** - Automatically categorize emails using OpenAI
+* **Smart Spam Detection** - Identify and remove spam with high accuracy
+* **Natural Language Chat** - Manage emails by talking to AI assistant
+* **Analytics Dashboard** - Insights into your email patterns
+* **Gmail Integration** - Seamless sync with your Gmail account
+* **Bulk Operations** - Clean thousands of emails with one click
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 scrapit/
@@ -27,16 +27,18 @@ scrapit/
 └── .env             # Environment variables
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Backend
+
 ```bash
 cd backend
 pip install -r requirements.txt
 python start.py
 ```
 
-### Frontend  
+### Frontend
+
 ```bash
 cd frontend
 npm install
@@ -44,43 +46,43 @@ npm start
 ```
 
 ### Environment Setup
+
 ```bash
 # Copy and update with your API keys
 cp .env.example .env
 ```
 
 Required API keys:
-- **Google OAuth** - For Gmail access
-- **OpenAI API** - For AI classification
 
-## 🎯 Usage
+* **Google OAuth** - For Gmail access
+* **OpenAI API** - For AI classification
+
+## Usage
 
 1. **Login** with Google to connect your Gmail
-2. **Sync** emails from your inbox  
+2. **Sync** emails from your inbox
 3. **Classify** emails automatically with AI
 4. **Chat** with the assistant: "Delete my spam emails"
 5. **Analyze** your email patterns and cleanup progress
 
-## 🛠️ Tech Stack
+## Tech Stack
 
-**Backend:** FastAPI, SQLAlchemy, OpenAI, Google APIs  
-**Frontend:** React, TypeScript, Tailwind CSS  
+**Backend:** FastAPI, SQLAlchemy, OpenAI, Google APIs
+**Frontend:** React, TypeScript, Tailwind CSS
 **Database:** SQLite (dev) / PostgreSQL (prod)
 
-## 📝 API Endpoints
+## API Endpoints
 
-- `GET /` - Health check
-- `POST /auth/google` - Start OAuth flow
-- `POST /gmail/sync` - Sync emails
-- `POST /ai/classify` - Classify emails  
-- `POST /chat/chat` - Chat with AI
-- `GET /docs` - Interactive API documentation
+* `GET /` - Health check
+* `POST /auth/google` - Start OAuth flow
+* `POST /gmail/sync` - Sync emails
+* `POST /ai/classify` - Classify emails
+* `POST /chat/chat` - Chat with AI
+* `GET /docs` - Interactive API documentation
 
-## 🔒 Security
+## Security
 
-- OAuth tokens encrypted at rest
-- JWT session management
-- Environment-based configuration
-- CORS protection
-
-Built with ❤️ for efficient email management.
+* OAuth tokens encrypted at rest
+* JWT session management
+* Environment-based configuration
+* CORS protection
