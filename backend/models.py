@@ -14,14 +14,16 @@ from cryptography.fernet import Fernet
 Base = declarative_base()
 
 # Encryption setup
-ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "dev-key").encode()
-if len(ENCRYPTION_KEY) < 32:
-    ENCRYPTION_KEY = ENCRYPTION_KEY.ljust(32, b'0')[:32]
-
-try:
-    cipher_suite = Fernet(Fernet.generate_key())
-except:
-    # Fallback for development
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
+if ENCRYPTION_KEY:
+    try:
+        # Use the key from environment (should be base64 encoded)
+        cipher_suite = Fernet(ENCRYPTION_KEY.encode())
+    except Exception as e:
+        print(f"Warning: Invalid encryption key, using fallback: {e}")
+        cipher_suite = None
+else:
+    print("Warning: No ENCRYPTION_KEY found, tokens will be stored in plaintext")
     cipher_suite = None
 
 class User(Base):

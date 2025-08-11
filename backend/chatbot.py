@@ -28,8 +28,8 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
-    action: str = None
-    data: dict = None
+    action: Optional[str] = None
+    data: Optional[dict] = None
     suggestions: List[str] = []
     quick_actions: List[dict] = []
 

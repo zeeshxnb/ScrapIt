@@ -70,12 +70,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Handle OAuth callback
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
+    const error = urlParams.get('error');
     
     if (token) {
+      console.log('OAuth token received, logging in...');
       localStorage.setItem('auth_token', token);
       // Remove token from URL
       window.history.replaceState({}, document.title, window.location.pathname);
       checkAuth();
+      toast.success('Successfully logged in!');
+    } else if (error) {
+      console.error('OAuth error:', error);
+      // Remove error from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Show user-friendly error messages
+      switch (error) {
+        case 'access_denied':
+          toast.error('Login cancelled. Please try again to access your Gmail.');
+          break;
+        case 'no_code':
+          toast.error('Login failed. Please try again.');
+          break;
+        case 'auth_failed':
+          toast.error('Authentication failed. Please check your internet connection and try again.');
+          break;
+        default:
+          toast.error('Login failed. Please try again.');
+      }
     }
   }, []);
 

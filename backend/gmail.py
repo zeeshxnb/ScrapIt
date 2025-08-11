@@ -81,14 +81,15 @@ class GmailService:
                 messages = result.get('messages', [])
                 all_messages.extend(messages)
                 
-                # Only print every 5th batch to reduce output
-                if batch_count % 5 == 0 or batch_count == 1:
-                    print(f"Batch {batch_count}: Retrieved {len(messages)} messages, total: {len(all_messages)}")
+                # Progress bar display
+                progress_percent = min(100, (len(all_messages) / 5000) * 100) if len(all_messages) < 5000 else 100
+                progress_bar = "█" * int(progress_percent / 5) + "░" * (20 - int(progress_percent / 5))
+                print(f"\r📧 Fetching: [{progress_bar}] {len(all_messages)} emails", end="", flush=True)
                 
                 # Check if there are more pages
                 next_page_token = result.get('nextPageToken')
                 if not next_page_token or not messages:
-                    print(f"✅ Completed: {len(all_messages)} messages retrieved")
+                    print(f"\n✅ Retrieved {len(all_messages)} emails from Gmail")
                     break
                 
                 # If max_results is specified and we've reached it, stop
@@ -97,8 +98,8 @@ class GmailService:
                     print(f"🎯 Reached limit: {max_results} messages")
                     break
                 
-                # Small delay to respect rate limits
-                time.sleep(0.1)
+                # Minimal delay to respect rate limits
+                time.sleep(0.05)
             
             if len(all_messages) > 0:
                 print(f"📧 Total: {len(all_messages)} messages ({batch_count} batches)")
@@ -126,8 +127,8 @@ class GmailService:
                 id=message_id
             ).execute()
             
-            # Small delay to respect rate limits
-            time.sleep(0.05)
+            # Minimal delay to respect rate limits
+            time.sleep(0.02)
             
             # Extract headers
             headers = {}
@@ -202,10 +203,11 @@ class GmailService:
             for i in range(0, len(messages), batch_size):
                 batch_count += 1
                 batch_messages = messages[i:i + batch_size]
-                # Only show progress every 10th batch or for first/last
-                if batch_count % 10 == 0 or batch_count == 1 or i + batch_size >= len(messages):
-                    progress = f"{i + len(batch_messages)}/{len(messages)}"
-                    print(f"⚙️  Batch {batch_count}: {len(batch_messages)} emails ({progress})")
+                # Progress bar for processing
+                processed = i + len(batch_messages)
+                progress_percent = (processed / len(messages)) * 100
+                progress_bar = "█" * int(progress_percent / 5) + "░" * (20 - int(progress_percent / 5))
+                print(f"\r💾 Processing: [{progress_bar}] {processed}/{len(messages)} emails ({progress_percent:.1f}%)", end="", flush=True)
                 
                 for msg in batch_messages:
                     try:
@@ -214,11 +216,15 @@ class GmailService:
                             continue
                         processed_ids.add(msg['id'])
                         
-                        # Check if email already exists
+                        # Check if email already exists (prevent duplicates)
                         existing = db.query(Email).filter(
                             Email.gmail_id == msg['id'],
                             Email.user_id == str(self.user.id)
                         ).first()
+                        
+                        # Skip if already exists and this is a full sync (avoid duplicates)
+                        if existing and not incremental:
+                            continue
                         
                         # Get full message details
                         email_data = self.get_message(msg['id'])
@@ -272,16 +278,22 @@ class GmailService:
                 # Commit batch to database
                 try:
                     db.commit()
-                    # Only show commit status every 10th batch
-                    if batch_count % 10 == 0 or batch_count == 1:
-                        print(f"💾 Batch {batch_count} saved: {new_count} new, {updated_count} updated")
+                    # Show save status less frequently
+                    if batch_count % 20 == 0:
+                        print(f"\n💾 Saved progress: {new_count} new, {updated_count} updated")
                 except Exception as e:
                     db.rollback()
                     print(f"Error committing batch {batch_count}: {str(e)}")
                     return {"success": False, "error": f"Database error in batch {batch_count}: {str(e)}"}
                 
-                # Small delay between batches to be gentle on the system
-                time.sleep(0.5)
+                # Minimal delay between batches
+                time.sleep(0.1)
+            
+            print(f"\n✅ Sync completed: {new_count} new, {updated_count} updated, {error_count} errors")
+            
+            # Validate final count
+            final_count = db.query(Email).filter(Email.user_id == str(self.user.id)).count()
+            print(f"📊 Database now contains: {final_count} emails")
             
             return {
                 "success": True,
@@ -295,7 +307,8 @@ class GmailService:
                 "synced_labels": specific_labels if specific_labels else "ALL",
                 "query_used": query,
                 "batch_size": batch_size,
-                "no_limits_applied": max_results is None
+                "no_limits_applied": max_results is None,
+                "final_email_count": final_count
             }
             
         except Exception as e:
@@ -379,6 +392,54 @@ class GmailService:
         except Exception as e:
             print(f"Error getting folder stats: {e}")
             return {}
+    
+    def cleanup_database(self, db: Session) -> dict:
+        """Clean up duplicates and verify email existence in Gmail"""
+        if not self.authenticate():
+            return {"success": False, "error": "Authentication failed"}
+        
+        try:
+            print("🧹 Starting database cleanup...")
+            
+            # 1. Remove duplicates based on gmail_id
+            print("🔍 Checking for duplicates...")
+            duplicates_removed = 0
+            
+            # Find emails with duplicate gmail_ids
+            from sqlalchemy import func
+            duplicate_gmail_ids = db.query(Email.gmail_id).filter(
+                Email.user_id == str(self.user.id)
+            ).group_by(Email.gmail_id).having(func.count(Email.gmail_id) > 1).all()
+            
+            for (gmail_id,) in duplicate_gmail_ids:
+                # Keep the first one, delete the rest
+                emails_with_id = db.query(Email).filter(
+                    Email.gmail_id == gmail_id,
+                    Email.user_id == str(self.user.id)
+                ).order_by(Email.created_at).all()
+                
+                # Delete all but the first
+                for email in emails_with_id[1:]:
+                    db.delete(email)
+                    duplicates_removed += 1
+            
+            db.commit()
+            print(f"🗑️  Removed {duplicates_removed} duplicate emails")
+            
+            # 2. Get current count
+            current_count = db.query(Email).filter(Email.user_id == str(self.user.id)).count()
+            print(f"📊 Database now has {current_count} emails")
+            
+            return {
+                "success": True,
+                "duplicates_removed": duplicates_removed,
+                "final_count": current_count
+            }
+            
+        except Exception as e:
+            db.rollback()
+            print(f"❌ Cleanup error: {e}")
+            return {"success": False, "error": str(e)}
 
 # Routes
 @router.post("/sync")
@@ -624,6 +685,45 @@ async def sync_specific_folders(
         "synced_labels": labels,
         **result
     }
+
+@router.post("/cleanup")
+async def cleanup_database(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Clean up duplicate emails and fix database inconsistencies"""
+    
+    gmail_service = GmailService(current_user)
+    result = gmail_service.cleanup_database(db)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    
+    return {
+        "message": f"Cleanup completed: {result['duplicates_removed']} duplicates removed",
+        **result
+    }
+
+@router.delete("/reset")
+async def reset_email_database(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Reset email database - DELETE ALL emails for fresh sync"""
+    
+    try:
+        # Delete all emails for this user
+        deleted_count = db.query(Email).filter(Email.user_id == current_user.id).count()
+        db.query(Email).filter(Email.user_id == current_user.id).delete()
+        db.commit()
+        
+        return {
+            "message": f"Database reset: {deleted_count} emails deleted. Ready for fresh sync.",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Reset failed: {str(e)}")
 
 # Export router
 gmail_router = router
