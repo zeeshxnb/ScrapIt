@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { Email, EmailSummary, EmailContextType, EmailFetchParams, EmailFilters } from '../types';
 import { gmailApi, aiApi, chatApi } from '../services/api.ts';
 import toast from 'react-hot-toast';

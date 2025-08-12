@@ -1,16 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import {
-  EnvelopeIcon,
-  ExclamationTriangleIcon,
-  SparklesIcon,
-  TrashIcon,
-  ChartBarIcon,
-  ClockIcon,
-} from '@heroicons/react/24/outline';
+import { EnvelopeIcon, ExclamationTriangleIcon, SparklesIcon, ChartBarIcon, ClockIcon } from '@heroicons/react/24/outline';
 import { useEmail } from '../contexts/EmailContext.tsx';
 import { chatApi } from '../services/api.ts';
 import LoadingSpinner from '../components/LoadingSpinner.tsx';
 import { QuickAction } from '../types';
+import { t, onPrefsChange } from '../i18n.ts';
 
 // Format sender names: map companies and derive person names
 const formatSenderName = (email: string): string => {
@@ -51,11 +45,21 @@ const Dashboard: React.FC = () => {
   const { summary, fetchSummary, classifyEmails, deleteSpamEmails, isLoading } = useEmail();
   const [quickActions, setQuickActions] = useState<QuickAction[]>([]);
   const [loadingActions, setLoadingActions] = useState(false);
+  const [progressByAction, setProgressByAction] = useState<Record<string, number>>({});
 
   useEffect(() => {
     fetchSummary();
     loadQuickActions();
+    const unsub = onPrefsChange(() => setLangTick((v) => v + 1));
+    return unsub;
+  }, [fetchSummary]);
+
+  // Trigger re-render on language changes without keeping the tick
+  useEffect(() => {
+    const unsub = onPrefsChange(() => setRerenderKey((k) => k + 1));
+    return unsub;
   }, []);
+  const [rerenderKey, setRerenderKey] = useState(0);
 
   const loadQuickActions = async () => {
     try {
@@ -70,15 +74,27 @@ const Dashboard: React.FC = () => {
   };
 
   const handleQuickAction = async (actionId: string) => {
+    // Start progress at 0 and update via simple intervals; finalize on completion
+    setProgressByAction(prev => ({ ...prev, [actionId]: 5 }));
+    const interval = setInterval(() => {
+      setProgressByAction(prev => ({ ...prev, [actionId]: Math.min((prev[actionId] || 0) + 8, 90) }));
+    }, 300);
     switch (actionId) {
       case 'delete_spam':
         await deleteSpamEmails();
+        window.dispatchEvent(new CustomEvent('app:notify', { detail: { text: 'Deleted spam emails' } }));
         break;
       case 'classify_emails':
         await classifyEmails();
+        window.dispatchEvent(new CustomEvent('app:notify', { detail: { text: 'Classified emails' } }));
         break;
       case 'sync_emails':
-        // This is handled by the header sync button
+        window.dispatchEvent(new CustomEvent('app:notify', { detail: { text: 'Starting email sync…' } }));
+        // Call the actual sync; kept minimal UI log elsewhere
+        await fetchSummary();
+        break;
+      case 'go_to_ai':
+        window.location.href = '/chat';
         break;
       default:
         console.log('Unknown action:', actionId);
@@ -86,6 +102,9 @@ const Dashboard: React.FC = () => {
     
     // Refresh data after action
     await Promise.all([fetchSummary(), loadQuickActions()]);
+    clearInterval(interval);
+    setProgressByAction(prev => ({ ...prev, [actionId]: 100 }));
+    setTimeout(() => setProgressByAction(prev => ({ ...prev, [actionId]: 0 })), 800);
   };
 
   const stats = [
@@ -94,6 +113,7 @@ const Dashboard: React.FC = () => {
       value: summary?.total || 0,
       icon: EnvelopeIcon,
       color: 'text-primary-600',
+      darkColor: 'dark:text-blue-300',
       bgColor: 'bg-primary-50',
     },
     {
@@ -101,6 +121,7 @@ const Dashboard: React.FC = () => {
       value: summary?.spam || 0,
       icon: ExclamationTriangleIcon,
       color: 'text-red-600',
+      darkColor: 'dark:text-red-300',
       bgColor: 'bg-red-50',
     },
     {
@@ -108,6 +129,7 @@ const Dashboard: React.FC = () => {
       value: summary?.unprocessed || 0,
       icon: ClockIcon,
       color: 'text-yellow-600',
+      darkColor: 'dark:text-yellow-300',
       bgColor: 'bg-yellow-50',
     },
     {
@@ -115,6 +137,7 @@ const Dashboard: React.FC = () => {
       value: Object.keys(summary?.categories || {}).length,
       icon: ChartBarIcon,
       color: 'text-green-600',
+      darkColor: 'dark:text-green-300',
       bgColor: 'bg-green-50',
     },
   ];
@@ -131,9 +154,8 @@ const Dashboard: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Overview of your email management</p>
-        <p className="text-xs text-red-500">TEST: {new Date().toLocaleTimeString()}</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('dashboard.title')}</h1>
+        <p className="text-gray-600 dark:text-gray-300">{t('dashboard.subtitle')}</p>
       </div>
 
       {/* Stats Grid */}
@@ -143,12 +165,12 @@ const Dashboard: React.FC = () => {
           return (
             <div key={stat.name} className="card">
               <div className="flex items-center">
-                <div className={`p-3 rounded-lg ${stat.bgColor}`}>
-                  <Icon className={`w-6 h-6 ${stat.color}`} />
+                <div className={`p-3 rounded-lg ${stat.bgColor} dark:bg-gray-800 dark:border dark:border-gray-700`}>
+                  <Icon className={`w-6 h-6 ${stat.color} ${stat.darkColor || ''}`} />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">{stat.name}</p>
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">{stat.name}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stat.value}</p>
                 </div>
               </div>
             </div>
@@ -159,7 +181,7 @@ const Dashboard: React.FC = () => {
       {/* Quick Actions */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('dashboard.quickActions')}</h2>
           {loadingActions && <LoadingSpinner size="small" />}
         </div>
         
@@ -171,29 +193,38 @@ const Dashboard: React.FC = () => {
               disabled={isLoading}
               className={`p-4 rounded-lg border-2 border-dashed transition-all hover:border-solid hover:shadow-md ${
                 action.type === 'destructive'
-                  ? 'border-red-200 hover:border-red-300 hover:bg-red-50'
+                  ? 'border-red-200 hover:border-red-300 hover:bg-red-50 dark:border-red-700 dark:hover:border-red-600 dark:hover:bg-red-900/30'
                   : action.type === 'primary'
-                  ? 'border-primary-200 hover:border-primary-300 hover:bg-primary-50'
-                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  ? 'border-primary-200 hover:border-primary-300 hover:bg-primary-50 dark:border-blue-700 dark:hover:border-blue-600 dark:hover:bg-blue-900/30'
+                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:border-gray-600 dark:hover:bg-gray-800'
               }`}
             >
               <div className="flex items-center space-x-3">
                 <span className="text-2xl">{action.icon}</span>
                 <div className="text-left">
-                  <p className="font-medium text-gray-900">{action.label}</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{action.label}</p>
                   {action.count && (
-                    <p className="text-sm text-gray-500">{action.count} items</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{action.count} items</p>
                   )}
                 </div>
               </div>
+              {/* Show progress bar only for actions that support it (not for go_to_ai) */}
+              {action.id !== 'go_to_ai' && (progressByAction[action.id] || 0) > 0 && (
+                <div className="mt-3 h-2 bg-gray-200 rounded-full overflow-hidden dark:bg-gray-700">
+                  <div
+                    className="h-2 bg-primary-600 transition-all dark:bg-blue-400"
+                    style={{ width: `${progressByAction[action.id] || 0}%` }}
+                  />
+                </div>
+              )}
             </button>
           ))}
           
           {quickActions.length === 0 && !loadingActions && (
-            <div className="col-span-full text-center py-8 text-gray-500">
+            <div className="col-span-full text-center py-8 text-gray-500 dark:text-gray-400">
               <SparklesIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p>No quick actions available</p>
-              <p className="text-sm">Sync your emails to see available actions</p>
+              <p>{t('dashboard.noActions')}</p>
+              <p className="text-sm">{t('dashboard.noActionsHint')}</p>
             </div>
           )}
         </div>
@@ -211,16 +242,16 @@ const Dashboard: React.FC = () => {
                 return (
                   <div key={index} className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                        <span className="text-xs font-medium text-gray-600">
+                      <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center dark:bg-gray-700">
+                        <span className="text-xs font-medium text-gray-600 dark:text-gray-200">
                           {displayName.charAt(0).toUpperCase()}
                         </span>
                       </div>
-                      <span className="text-sm font-medium text-gray-900 truncate max-w-48">
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-48">
                         {displayName}
                       </span>
                     </div>
-                    <span className="text-sm text-gray-600">{sender.count}</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">{sender.count}</span>
                   </div>
                 );
               }) || (
@@ -252,23 +283,7 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Oldest Unread */}
-      {summary?.oldest_unread && (
-        <div className="card bg-yellow-50 border-yellow-200">
-          <div className="flex items-start space-x-3">
-            <ClockIcon className="w-5 h-5 text-yellow-600 mt-0.5" />
-            <div>
-              <h3 className="font-medium text-yellow-900">Oldest Unread Email</h3>
-              <p className="text-sm text-yellow-800 mt-1">
-                <strong>{summary.oldest_unread.subject}</strong> from {summary.oldest_unread.sender}
-              </p>
-              <p className="text-xs text-yellow-700 mt-1">
-                Received: {new Date(summary.oldest_unread.received_date).toLocaleDateString()}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Oldest Unread removed */}
     </div>
   );
 };

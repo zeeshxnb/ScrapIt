@@ -1,42 +1,86 @@
 import React, { useEffect, useState } from 'react';
-import {
-  MagnifyingGlassIcon,
-  FunnelIcon,
-  TrashIcon,
-  ArchiveBoxIcon,
-  TagIcon,
-  CheckIcon,
-  ExclamationTriangleIcon,
-  ClockIcon,
-} from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, FunnelIcon, TrashIcon, ArchiveBoxIcon, TagIcon, ExclamationTriangleIcon, ClockIcon } from '@heroicons/react/24/outline';
 import { useEmail } from '../contexts/EmailContext.tsx';
-import { Email } from '../types';
+import { onPrefsChange, getPrefs, resolveTimeZone, t } from '../i18n.ts';
+// import { Email } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner.tsx';
 
 const EmailsPage: React.FC = () => {
-  const { emails, fetchEmails, isLoading, deleteSpamEmails, bulkDeleteEmails } = useEmail();
+  const { emails, fetchEmails, isLoading, bulkDeleteEmails } = useEmail();
   const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterSpam, setFilterSpam] = useState<boolean | null>(null);
+  const [filterLabel, setFilterLabel] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [senderFilter, setSenderFilter] = useState<string>('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [locale, setLocale] = useState<string | undefined>(undefined);
+  const [timeZone, setTimeZone] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     fetchEmails();
+    try {
+      const prefs = getPrefs();
+      setPageSize(parseInt(String(prefs.emailsPerPage || 50)));
+      setLocale(prefs.language || undefined);
+      setTimeZone(resolveTimeZone(prefs.timezone));
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    // Live updates when preferences change
+    return onPrefsChange((p) => {
+      if (p.emailsPerPage) setPageSize(parseInt(String(p.emailsPerPage)));
+      setLocale(p.language || undefined);
+      setTimeZone(resolveTimeZone(p.timezone));
+      if (p.emailsPerPage) setPage(1);
+    });
+  }, []);
+
+  // prefs handled via state above
+
+  const normalizeLabel = (lbl?: string) => {
+    if (!lbl) return '';
+    const systemMap: Record<string, string> = {
+      INBOX: 'Inbox', SPAM: 'Spam', TRASH: 'Trash', SENT: 'Sent', DRAFT: 'Draft',
+      CATEGORY_UPDATES: 'Updates', CATEGORY_PERSONAL: 'Personal', CATEGORY_FORUMS: 'Forums',
+      CATEGORY_PROMOTIONS: 'Promotions', CATEGORY_SOCIAL: 'Social', IMPORTANT: 'Important',
+    };
+    return systemMap[lbl] || lbl;
+  };
+
   const filteredEmails = emails.filter(email => {
+    // Always hide Spam and Trash
+    const labels = (email.labels || []).map(l => String(l).toUpperCase());
+    if (labels.includes('SPAM') || labels.includes('TRASH')) return false;
     const matchesSearch = email.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          email.sender.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          email.snippet.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesCategory = filterCategory === 'all' || email.category === filterCategory;
     const matchesSpam = filterSpam === null || email.is_spam === filterSpam;
+    const matchesLabel = filterLabel === 'all' || (email.labels || []).some(l => normalizeLabel(l) === filterLabel);
     
-    return matchesSearch && matchesCategory && matchesSpam;
+    return matchesSearch && matchesCategory && matchesSpam && matchesLabel;
   });
 
   const categories = [...new Set(emails.map(email => email.category).filter(Boolean))];
+  const allLabels = [...new Set((emails || []).flatMap(e => (e.labels || []).map(l => normalizeLabel(l))))].filter(Boolean) as string[];
+  const allSenders = [...new Set((emails || []).map(e => e.sender))].filter(Boolean) as string[];
+  const totalPages = Math.max(1, Math.ceil(filteredEmails.length / pageSize));
+  const pagedEmails = React.useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredEmails.slice(start, start + pageSize);
+  }, [filteredEmails, page, pageSize]);
+
+  // Keep page within bounds whenever filters or pageSize change
+  useEffect(() => {
+    const newTotal = Math.max(1, Math.ceil(filteredEmails.length / pageSize));
+    if (page > newTotal) setPage(newTotal);
+  }, [filteredEmails.length, pageSize, page]);
 
   const handleSelectEmail = (emailId: string) => {
     setSelectedEmails(prev => 
@@ -81,7 +125,7 @@ const EmailsPage: React.FC = () => {
     if (diffDays === 1) return 'Today';
     if (diffDays === 2) return 'Yesterday';
     if (diffDays <= 7) return `${diffDays} days ago`;
-    return date.toLocaleDateString();
+    return date.toLocaleDateString(locale, timeZone ? { timeZone } : undefined);
   };
 
   if (isLoading && emails.length === 0) {
@@ -97,10 +141,10 @@ const EmailsPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Emails</h1>
-          <p className="text-gray-600">
-            {filteredEmails.length} of {emails.length} emails
-          </p>
+           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('emails.title')}</h1>
+           <p className="text-gray-600 dark:text-gray-300">
+             {filteredEmails.length} matching • page {page} of {totalPages}
+           </p>
         </div>
         
         <div className="flex items-center space-x-3">
@@ -123,8 +167,8 @@ const EmailsPage: React.FC = () => {
             onClick={() => setShowFilters(!showFilters)}
             className="btn-secondary flex items-center space-x-2"
           >
-            <FunnelIcon className="w-4 h-4" />
-            <span>Filters</span>
+             <FunnelIcon className="w-4 h-4" />
+             <span>{t('emails.filters')}</span>
           </button>
         </div>
       </div>
@@ -134,9 +178,15 @@ const EmailsPage: React.FC = () => {
         {/* Search */}
         <div className="relative">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
+           <input
             type="text"
-            placeholder="Search emails by subject, sender, or content..."
+            placeholder={
+              // simple i18n for placeholder
+              (getPrefs().language === 'es' && 'Busca por asunto, remitente o contenido...') ||
+              (getPrefs().language === 'fr' && 'Rechercher par objet, expéditeur ou contenu...') ||
+              (getPrefs().language === 'de' && 'Suche nach Betreff, Absender oder Inhalt...') ||
+              'Search emails by subject, sender, or content...'
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="input pl-10"
@@ -145,17 +195,15 @@ const EmailsPage: React.FC = () => {
 
         {/* Filters */}
         {showFilters && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Category
-              </label>
+               <label className="block text-sm font-medium text-gray-700 mb-2">{t('emails.category')}</label>
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
                 className="input"
               >
-                <option value="all">All Categories</option>
+                <option value="all">{t('emails.allCategories')}</option>
                 {categories.map(category => (
                   <option key={category} value={category}>
                     {category?.charAt(0).toUpperCase() + category?.slice(1)}
@@ -163,11 +211,37 @@ const EmailsPage: React.FC = () => {
                 ))}
               </select>
             </div>
+
+            <div>
+               <label className="block text-sm font-medium text-gray-700 mb-2">{t('emails.label')}</label>
+              <select
+                value={filterLabel}
+                onChange={(e) => setFilterLabel(e.target.value)}
+                className="input"
+              >
+                <option value="all">{t('emails.allLabels')}</option>
+                {allLabels.map(label => (
+                  <option key={label} value={label}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+               <label className="block text-sm font-medium text-gray-700 mb-2">{t('emails.sender')}</label>
+              <select
+                value={senderFilter}
+                onChange={(e) => setSenderFilter(e.target.value)}
+                className="input"
+              >
+                <option value="all">{t('emails.allSenders')}</option>
+                {allSenders.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Spam Filter
-              </label>
+               <label className="block text-sm font-medium text-gray-700 mb-2">{t('emails.spamFilter')}</label>
               <select
                 value={filterSpam === null ? 'all' : filterSpam.toString()}
                 onChange={(e) => {
@@ -176,9 +250,9 @@ const EmailsPage: React.FC = () => {
                 }}
                 className="input"
               >
-                <option value="all">All Emails</option>
-                <option value="false">Not Spam</option>
-                <option value="true">Spam Only</option>
+                <option value="all">{t('emails.allEmails')}</option>
+                <option value="false">{t('emails.notSpam')}</option>
+                <option value="true">{t('emails.spamOnly')}</option>
               </select>
             </div>
             
@@ -188,10 +262,12 @@ const EmailsPage: React.FC = () => {
                   setSearchQuery('');
                   setFilterCategory('all');
                   setFilterSpam(null);
+                  setFilterLabel('all');
+                  setSenderFilter('all');
                 }}
                 className="btn-secondary w-full"
               >
-                Clear Filters
+                 {t('emails.clearFilters')}
               </button>
             </div>
           </div>
@@ -201,37 +277,36 @@ const EmailsPage: React.FC = () => {
       {/* Email List */}
       <div className="card p-0">
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 flex items-center space-x-4">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center space-x-4">
           <input
             type="checkbox"
             checked={selectedEmails.length === filteredEmails.length && filteredEmails.length > 0}
             onChange={handleSelectAll}
             className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
           />
-          <span className="text-sm font-medium text-gray-700">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
             Select All
           </span>
         </div>
 
         {/* Email Items */}
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-gray-200 dark:divide-gray-700">
           {filteredEmails.length === 0 ? (
             <div className="p-8 text-center">
               <MagnifyingGlassIcon className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No emails found</h3>
-              <p className="text-gray-600">
-                {searchQuery || filterCategory !== 'all' || filterSpam !== null
-                  ? 'Try adjusting your search or filters'
-                  : 'Sync your emails to see them here'
-                }
+               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">{t('emails.noEmails')}</h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                 {searchQuery || filterCategory !== 'all' || filterSpam !== null
+                   ? t('emails.tryAdjust')
+                   : t('emails.syncToSee')}
               </p>
             </div>
           ) : (
-            filteredEmails.map((email) => (
+            pagedEmails.map((email) => (
               <div
                 key={email.id}
-                className={`p-4 hover:bg-gray-50 transition-colors ${
-                  selectedEmails.includes(email.id) ? 'bg-primary-50' : ''
+                className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
+                  selectedEmails.includes(email.id) ? 'bg-primary-50 dark:bg-blue-900/20' : ''
                 }`}
               >
                 <div className="flex items-start space-x-4">
@@ -245,38 +320,38 @@ const EmailsPage: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center space-x-3">
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                           {email.sender}
                         </p>
                         {email.is_spam && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">
                             <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
                             Spam
                           </span>
                         )}
                         {!email.is_processed && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300">
                             <ClockIcon className="w-3 h-3 mr-1" />
                             Unprocessed
                           </span>
                         )}
                         {email.category && (
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getCategoryColor(email.category)}`}>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getCategoryColor(email.category)} dark:bg-gray-700 dark:text-gray-200`}>
                             <TagIcon className="w-3 h-3 mr-1" />
                             {email.category}
                           </span>
                         )}
                       </div>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
                         {formatDate(email.received_date)}
                       </span>
                     </div>
                     
-                    <h3 className="text-sm font-medium text-gray-900 mb-1 truncate">
+                    <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1 truncate">
                       {email.subject}
                     </h3>
                     
-                    <p className="text-sm text-gray-600 line-clamp-2">
+                    <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
                       {email.snippet}
                     </p>
                     
@@ -323,14 +398,14 @@ const EmailsPage: React.FC = () => {
       {filteredEmails.length > 0 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-gray-700">
-            Showing <span className="font-medium">1</span> to{' '}
-            <span className="font-medium">{Math.min(50, filteredEmails.length)}</span> of{' '}
+            Showing <span className="font-medium">{(page - 1) * pageSize + 1}</span> to{' '}
+            <span className="font-medium">{Math.min(page * pageSize, filteredEmails.length)}</span> of{' '}
             <span className="font-medium">{filteredEmails.length}</span> results
           </p>
           
           <div className="flex items-center space-x-2">
-            <button className="btn-secondary">Previous</button>
-            <button className="btn-secondary">Next</button>
+            <button className="btn-secondary" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>{t('emails.previous')}</button>
+            <button className="btn-secondary" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>{t('emails.next')}</button>
           </div>
         </div>
       )}

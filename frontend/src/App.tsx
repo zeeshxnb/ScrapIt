@@ -9,6 +9,8 @@ import EmailsPage from './pages/EmailsPage.tsx';
 import ChatPage from './pages/ChatPage.tsx';
 import AnalyticsPage from './pages/AnalyticsPage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
+import Privacy from './pages/Privacy.tsx';
+import Terms from './pages/Terms.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 
 function App() {
@@ -31,6 +33,8 @@ function App() {
               <Route path="chat" element={<ChatPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="privacy" element={<Privacy />} />
+              <Route path="terms" element={<Terms />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

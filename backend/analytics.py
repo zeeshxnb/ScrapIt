@@ -271,6 +271,8 @@ async def get_analytics_overview(
     # Processing efficiency (functional)
     processed_emails = max(period_emails - unprocessed_emails, 0)
     processing_rate = round((processed_emails / period_emails) * 100, 1) if period_emails > 0 else 0
+    # Estimate time saved assuming each processed email saves 8 seconds of manual review
+    time_saved_seconds = int(processed_emails * 8)
     label_coverage = round((db.query(Email).filter(
         Email.user_id == current_user.id,
         Email.labels.isnot(None),
@@ -327,6 +329,7 @@ async def get_analytics_overview(
             "processed_emails": processed_emails,
             "processing_rate": processing_rate,
             "label_coverage": label_coverage,
+            "time_saved_seconds": time_saved_seconds,
             "period_days": 0 if start_date is None else days,
             "period_change": period_change,
             "processed_change": processed_change,

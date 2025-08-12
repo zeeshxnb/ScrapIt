@@ -3,6 +3,7 @@ import { PaperAirplaneIcon, SparklesIcon, TrashIcon, ChartBarIcon, ArrowPathIcon
 import { chatApi } from '../services/api.ts';
 import { useEmail } from '../contexts/EmailContext.tsx';
 import LoadingSpinner from '../components/LoadingSpinner.tsx';
+import { t, onPrefsChange } from '../i18n.ts';
 
 interface ChatMessage {
   id: string;
@@ -30,17 +31,22 @@ const ChatPage: React.FC = () => {
     const welcomeMessage: ChatMessage = {
       id: '1',
       message: '',
-      response: "Hi! I'm your ScrapIt AI assistant. I can help you manage your emails with natural language commands. Try asking me to 'delete spam emails' or 'show my email stats'!",
+      response: `${t('chat.welcome')} ${t('chat.suggest.showStats')}`,
       isUser: false,
       timestamp: new Date().toISOString(),
       suggestions: [
-        "Show me my email statistics",
-        "Delete my spam emails",
-        "Classify my unprocessed emails",
-        "Find emails from my boss"
+        t('chat.suggest.showStats'),
+        t('chat.suggest.deleteSpam'),
+        t('chat.suggest.classify'),
+        t('chat.suggest.findBoss')
       ]
     };
     setMessages([welcomeMessage]);
+    const unsub = onPrefsChange(() => {
+      // re-seed suggestions on language change
+      setMessages((prev) => prev.length ? prev : [welcomeMessage]);
+    });
+    return unsub;
   }, []);
 
   useEffect(() => {
@@ -175,23 +181,23 @@ const ChatPage: React.FC = () => {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
+      <div className="border-b border-gray-200 bg-white px-6 py-4 dark:bg-gray-900 dark:border-gray-800">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">AI Assistant</h1>
-            <p className="text-gray-600">Chat with your email management assistant</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('chat.title')}</h1>
+            <p className="text-gray-600 dark:text-gray-400">{t('chat.subtitle')}</p>
           </div>
           
           <div className="flex items-center space-x-2">
             <SparklesIcon className="w-6 h-6 text-primary-600" />
-            <span className="text-sm font-medium text-primary-600">AI Powered</span>
+            <span className="text-sm font-medium text-primary-600">{t('chat.aiPowered')}</span>
           </div>
         </div>
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <h3 className="text-sm font-medium text-gray-700 mb-3">Quick Actions</h3>
+      <div className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900 dark:border-gray-800">
+        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{t('chat.quickActions')}</h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {quickActions.map((action, index) => {
             const Icon = action.icon;
@@ -200,10 +206,10 @@ const ChatPage: React.FC = () => {
                 key={index}
                 onClick={action.action}
                 disabled={action.disabled}
-                className={`p-3 rounded-lg border border-gray-200 transition-colors ${
+                className={`p-3 rounded-lg border border-gray-200 transition-colors dark:border-gray-700 ${
                   action.disabled 
                     ? 'opacity-50 cursor-not-allowed' 
-                    : `${action.color} hover:border-gray-300`
+                    : `${action.color} hover:border-gray-300 dark:bg-gray-800 dark:text-gray-100`
                 }`}
               >
                 <div className="flex items-center space-x-2">
@@ -217,7 +223,7 @@ const ChatPage: React.FC = () => {
       </div>
 
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
+      <div className="flex-1 overflow-y-auto bg-gray-50 p-6 dark:bg-gray-900">
         <div className="max-w-4xl mx-auto space-y-6">
           {messages.map((message) => (
             <div key={message.id} className="space-y-4">
@@ -240,10 +246,10 @@ const ChatPage: React.FC = () => {
                 <div className="flex justify-start">
                   <div className="max-w-xs lg:max-w-2xl">
                     <div className="flex items-start space-x-3">
-                      <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-                        <SparklesIcon className="w-4 h-4 text-primary-600" />
+                       <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0 dark:bg-blue-900/40">
+                         <SparklesIcon className="w-4 h-4 text-primary-600 dark:text-blue-300" />
                       </div>
-                      <div className="bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200">
+                       <div className="bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
                         {(() => {
                           const renderMessage = (text: string) => {
                             const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -256,7 +262,7 @@ const ChatPage: React.FC = () => {
                           };
                           return (
                             <p
-                              className="text-sm text-gray-900"
+                              className="text-sm text-gray-900 dark:text-gray-100"
                               dangerouslySetInnerHTML={renderMessage(message.response)}
                             />
                           );
@@ -281,7 +287,7 @@ const ChatPage: React.FC = () => {
                     
                     {/* Suggestions removed from message bubble (quick actions remain below) */}
                     
-                    <p className="text-xs text-gray-500 mt-1 ml-11">
+                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-11">
                       {new Date(message.timestamp).toLocaleTimeString()}
                     </p>
                   </div>
@@ -294,13 +300,13 @@ const ChatPage: React.FC = () => {
           {isLoading && (
             <div className="flex justify-start">
               <div className="flex items-start space-x-3">
-                <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                  <SparklesIcon className="w-4 h-4 text-primary-600" />
+                <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center dark:bg-blue-900/40">
+                  <SparklesIcon className="w-4 h-4 text-primary-600 dark:text-blue-300" />
                 </div>
-                <div className="bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200">
+                <div className="bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
                   <div className="flex items-center space-x-2">
                     <LoadingSpinner size="small" />
-                    <span className="text-sm text-gray-500">Thinking...</span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">Thinking...</span>
                   </div>
                 </div>
               </div>
@@ -312,18 +318,18 @@ const ChatPage: React.FC = () => {
       </div>
 
       {/* Input Area */}
-      <div className="bg-white border-t border-gray-200 px-6 py-4">
+      <div className="bg-white border-t border-gray-200 px-6 py-4 dark:bg-gray-900 dark:border-gray-800">
         <div className="max-w-4xl mx-auto">
           {/* Suggestions */}
           {suggestions.length > 0 && (
             <div className="mb-4">
-              <p className="text-sm text-gray-600 mb-2">💡 Suggestions:</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">💡 Suggestions:</p>
               <div className="flex flex-wrap gap-2">
                 {suggestions.slice(0, 4).map((suggestion, index) => (
                   <button
                     key={index}
                     onClick={() => handleSuggestionClick(suggestion)}
-                    className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
+                    className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                   >
                     {suggestion}
                   </button>
@@ -340,9 +346,9 @@ const ChatPage: React.FC = () => {
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && sendMessage(inputMessage)}
-                placeholder="Ask me anything about your emails..."
+                placeholder={t('chat.input.placeholder')}
                 disabled={isLoading}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
               />
             </div>
             <button
@@ -354,8 +360,8 @@ const ChatPage: React.FC = () => {
             </button>
           </div>
 
-          <p className="text-xs text-gray-500 mt-2 text-center">
-            I can help you delete spam, classify emails, search your inbox, and more!
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+            {t('chat.helper')}
           </p>
         </div>
       </div>

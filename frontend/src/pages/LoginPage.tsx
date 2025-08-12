@@ -43,7 +43,7 @@ const LoginPage: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50">
+    <div className="min-h-screen bg-gray-900 text-gray-100">
       <div className="min-h-screen flex">
         {/* Left side - Features */}
         <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-12">
@@ -53,12 +53,12 @@ const LoginPage: React.FC = () => {
                 <SparklesIcon className="w-7 h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">ScrapIt</h1>
-                <p className="text-gray-600">AI-Powered Email Cleaner</p>
+                <h1 className="text-3xl font-bold text-gray-100">ScrapIt</h1>
+                <p className="text-gray-400">AI-Powered Email Cleaner</p>
               </div>
             </div>
 
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+            <h2 className="text-2xl font-bold text-gray-100 mb-6">
               Clean your inbox in minutes, not hours
             </h2>
 
@@ -71,8 +71,8 @@ const LoginPage: React.FC = () => {
                       <Icon className="w-5 h-5 text-primary-600" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 mb-1">{feature.title}</h3>
-                      <p className="text-gray-600 text-sm">{feature.description}</p>
+                      <h3 className="font-semibold text-gray-100 mb-1">{feature.title}</h3>
+                      <p className="text-gray-400 text-sm">{feature.description}</p>
                     </div>
                   </div>
                 );
@@ -90,23 +90,23 @@ const LoginPage: React.FC = () => {
                 <SparklesIcon className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">ScrapIt</h1>
+                <h1 className="text-2xl font-bold text-gray-100">ScrapIt</h1>
               </div>
             </div>
 
-            <div className="card">
+            <div className="card dark:bg-gray-800 dark:border-gray-700">
               <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                <h2 className="text-2xl font-bold text-gray-100 mb-2">
                   Welcome to ScrapIt
                 </h2>
-                <p className="text-gray-600">
+                <p className="text-gray-400">
                   Sign in with your Google account to start cleaning your inbox
                 </p>
               </div>
 
               <button
                 onClick={login}
-                className="w-full flex items-center justify-center space-x-3 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full flex items-center justify-center space-x-3 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:border-gray-600 dark:hover:bg-gray-700"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path
@@ -126,11 +126,11 @@ const LoginPage: React.FC = () => {
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                   />
                 </svg>
-                <span className="text-gray-700 font-medium">Continue with Google</span>
+                <span className="text-gray-700 font-medium dark:text-gray-100">Continue with Google</span>
               </button>
 
               <div className="mt-6 text-center">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-400">
                   By signing in, you agree to our Terms of Service and Privacy Policy.
                   We'll only access your Gmail to help you clean and organize your emails.
                 </p>
@@ -144,7 +144,7 @@ const LoginPage: React.FC = () => {
                 return (
                   <div key={index} className="flex items-center space-x-3 text-sm">
                     <Icon className="w-5 h-5 text-primary-600" />
-                    <span className="text-gray-600">{feature.title}</span>
+                    <span className="text-gray-400">{feature.title}</span>
                   </div>
                 );
               })}

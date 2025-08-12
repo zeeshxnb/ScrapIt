@@ -1,32 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import {
-  ChartBarIcon,
-  EnvelopeIcon,
-  ExclamationTriangleIcon,
-  ClockIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-  CalendarIcon,
-} from '@heroicons/react/24/outline';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ChartBarIcon, EnvelopeIcon, ClockIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import { useEmail } from '../contexts/EmailContext.tsx';
 import { analyticsApi } from '../services/api.ts';
 import LoadingSpinner from '../components/LoadingSpinner.tsx';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-  Area,
-  AreaChart,
-} from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Area, AreaChart } from 'recharts';
+import { onPrefsChange, t } from '../i18n.ts';
 
 const AnalyticsPage: React.FC = () => {
   const { summary, fetchSummary, isLoading } = useEmail();
@@ -38,6 +16,14 @@ const AnalyticsPage: React.FC = () => {
     console.log('🚀 AnalyticsPage mounted');
     fetchSummary();
     loadAnalyticsData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // React to preference changes (language/timezone)
+  useEffect(() => {
+    const unsub = onPrefsChange(() => loadAnalyticsData());
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Keep analytics in sync when global summary changes (e.g., after Dashboard actions)
@@ -50,6 +36,7 @@ const AnalyticsPage: React.FC = () => {
 
   useEffect(() => {
     loadAnalyticsData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeRange]);
 
   const loadAnalyticsData = async () => {
@@ -59,7 +46,12 @@ const AnalyticsPage: React.FC = () => {
       const days = timeRange === 'lifetime' ? 0 : timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365;
       
       console.log(`📊 Fetching analytics for ${days} days`);
-      const overview = await analyticsApi.getOverview(days);
+      const prefs = JSON.parse(localStorage.getItem('app_prefs') || '{}');
+      const tzPref = prefs?.preferences?.timezone;
+      const tzOffsetOverride = tzPref && tzPref !== 'auto' ? (
+        tzPref === 'utc' ? 0 : tzPref === 'pst' ? 480 : tzPref === 'est' ? 300 : undefined
+      ) : undefined;
+      const overview = await analyticsApi.getOverview(days, tzOffsetOverride);
       
       console.log('✅ Analytics data loaded:', { overview });
       setAnalyticsData(overview);
@@ -72,18 +64,18 @@ const AnalyticsPage: React.FC = () => {
   };
 
   // Use real analytics data
-  const categoryData = analyticsData?.categories || [];
-  const displayCategories = React.useMemo(() => {
-    const data = Array.isArray(categoryData) ? categoryData : [];
+  const displayCategories = useMemo(() => {
+    const raw = analyticsData?.categories || [];
+    const data = Array.isArray(raw) ? raw : [];
     const other = data.find((d: any) => d.name === 'Other');
     const top = data.filter((d: any) => d.name !== 'Other').slice(0, 8);
     if (other) top.push(other);
     return top;
-  }, [categoryData]);
+  }, [analyticsData?.categories]);
   const emailVolumeData = analyticsData?.time_series?.daily_volume || [];
-  const senderData = analyticsData?.top_senders || [];
+  // removed unused senderData
 
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+  const COLORS = ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#22d3ee'];
 
   const stats = [
     {
@@ -93,6 +85,7 @@ const AnalyticsPage: React.FC = () => {
       changeType: (analyticsData?.summary?.period_change || 0) >= 0 ? 'increase' : 'decrease',
       icon: EnvelopeIcon,
       color: 'text-blue-600',
+      darkColor: 'dark:text-blue-300',
       bgColor: 'bg-blue-50',
     },
     {
@@ -102,6 +95,7 @@ const AnalyticsPage: React.FC = () => {
       changeType: (analyticsData?.summary?.processed_change || 0) >= 0 ? 'increase' : 'decrease',
       icon: ChartBarIcon,
       color: 'text-green-600',
+      darkColor: 'dark:text-green-300',
       bgColor: 'bg-green-50',
     },
     {
@@ -111,6 +105,7 @@ const AnalyticsPage: React.FC = () => {
       changeType: (analyticsData?.summary?.unprocessed_change || 0) <= 0 ? 'decrease' : 'increase',
       icon: ClockIcon,
       color: 'text-yellow-600',
+      darkColor: 'dark:text-yellow-300',
       bgColor: 'bg-yellow-50',
     },
     {
@@ -120,6 +115,7 @@ const AnalyticsPage: React.FC = () => {
       changeType: (analyticsData?.summary?.label_coverage_change || 0) >= 0 ? 'increase' : 'decrease',
       icon: CalendarIcon,
       color: 'text-purple-600',
+      darkColor: 'dark:text-purple-300',
       bgColor: 'bg-purple-50',
     },
   ];
@@ -136,8 +132,8 @@ const AnalyticsPage: React.FC = () => {
     <div className="space-y-6">
       {/* Debug Info */}
       {loadingAnalytics && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <p className="text-blue-800 text-sm">🔄 Loading analytics data...</p>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 dark:bg-gray-800 dark:border-gray-700">
+          <p className="text-blue-800 text-sm dark:text-gray-100">🔄 Loading analytics data...</p>
         </div>
       )}
       
@@ -150,9 +146,9 @@ const AnalyticsPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-          <p className="text-gray-600">Insights into your email patterns and management</p>
-          <p className="text-xs text-gray-400">Last updated: {new Date().toLocaleTimeString()}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('analytics.title')}</h1>
+          <p className="text-gray-600 dark:text-gray-300">{t('analytics.subtitle')}</p>
+          <p className="text-xs text-gray-400">{t('analytics.lastUpdated')}: {new Date().toLocaleTimeString()}</p>
         </div>
         
         <div className="flex items-center space-x-3">
@@ -161,18 +157,18 @@ const AnalyticsPage: React.FC = () => {
             disabled={loadingAnalytics}
             className="btn btn-secondary"
           >
-            {loadingAnalytics ? 'Loading...' : 'Refresh Analytics'}
+            {loadingAnalytics ? 'Loading...' : t('analytics.refresh')}
           </button>
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
             className="input w-auto"
           >
-             <option value="7d">Last 7 days</option>
-             <option value="30d">Last 30 days</option>
-             <option value="90d">Last 90 days</option>
-             <option value="1y">Last year</option>
-             <option value="lifetime">Lifetime</option>
+             <option value="7d">{t('analytics.range.7d')}</option>
+             <option value="30d">{t('analytics.range.30d')}</option>
+             <option value="90d">{t('analytics.range.90d')}</option>
+             <option value="1y">{t('analytics.range.1y')}</option>
+             <option value="lifetime">{t('analytics.range.lifetime')}</option>
           </select>
         </div>
       </div>
@@ -200,8 +196,8 @@ const AnalyticsPage: React.FC = () => {
                     <span className="text-sm text-gray-500 ml-1">vs last period</span>
                   </div>
                 </div>
-                <div className={`p-3 rounded-lg ${stat.bgColor}`}>
-                  <Icon className={`w-6 h-6 ${stat.color}`} />
+                <div className={`p-3 rounded-lg ${stat.bgColor} dark:bg-gray-800 dark:border dark:border-gray-700`}>
+                  <Icon className={`w-6 h-6 ${stat.color} ${stat.darkColor || ''}`} />
                 </div>
               </div>
             </div>
@@ -213,7 +209,7 @@ const AnalyticsPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Email Volume Chart */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Email Volume Over Time</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('analytics.chart.volume')}</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={emailVolumeData}>
@@ -226,6 +222,10 @@ const AnalyticsPage: React.FC = () => {
                 <Tooltip 
                   labelFormatter={(value) => new Date(value).toLocaleDateString()}
                   formatter={(value, name) => [value, name === 'emails' ? 'Emails' : 'Spam']}
+                  contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', color: '#F3F4F6' }}
+                  itemStyle={{ color: '#93C5FD' }}
+                  labelStyle={{ color: '#D1D5DB' }}
+                  wrapperStyle={{ outline: 'none' }}
                 />
                  <Area type="monotone" dataKey="emails" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} />
               </AreaChart>
@@ -235,7 +235,7 @@ const AnalyticsPage: React.FC = () => {
 
         {/* Category Distribution (readable horizontal bars) */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Email Categories</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('analytics.chart.categories')}</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={displayCategories} layout="vertical" margin={{ left: 20 }}>
@@ -260,10 +260,10 @@ const AnalyticsPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Email Processing Stats */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Processing Status</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('analytics.processing')}</h3>
             <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Processed</span>
+              <span className="text-sm text-gray-600">{t('analytics.processed')}</span>
               <span className="text-sm font-medium">
                 {analyticsData?.summary?.processed_emails || 0}
               </span>
@@ -278,7 +278,7 @@ const AnalyticsPage: React.FC = () => {
             </div>
             
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Unprocessed</span>
+              <span className="text-sm text-gray-600">{t('analytics.unprocessed')}</span>
               <span className="text-sm font-medium">{analyticsData?.summary?.unprocessed_emails || 0}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
@@ -291,7 +291,7 @@ const AnalyticsPage: React.FC = () => {
             </div>
             
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Spam Detected</span>
+              <span className="text-sm text-gray-600">{t('analytics.spamDetected')}</span>
               <span className="text-sm font-medium">{analyticsData?.summary?.spam_emails || 0}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
@@ -307,22 +307,19 @@ const AnalyticsPage: React.FC = () => {
 
         {/* Time-based Insights */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Time Insights</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('analytics.timeInsights')}</h3>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Peak Email Hour</span>
+              <span className="text-sm text-gray-600">{t('analytics.peakHour')}</span>
               <span className="text-sm font-medium">{analyticsData?.insights?.peak_email_hour || '9:00 AM'}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Busiest Day</span>
+              <span className="text-sm text-gray-600">{t('analytics.busiestDay')}</span>
               <span className="text-sm font-medium">{analyticsData?.insights?.busiest_day || 'Tuesday'}</span>
             </div>
+            {/* Avg Response Time removed (not reliable without thread analysis) */}
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Avg Response Time</span>
-              <span className="text-sm font-medium">{analyticsData?.insights?.avg_response_time || '2.3 hours'}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Weekend Emails</span>
+              <span className="text-sm text-gray-600">{t('analytics.weekendEmails')}</span>
               <span className="text-sm font-medium">{analyticsData?.insights?.weekend_percentage || 12}%</span>
             </div>
           </div>
@@ -330,21 +327,23 @@ const AnalyticsPage: React.FC = () => {
 
         {/* Cleanup Efficiency */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Cleanup Efficiency</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('analytics.cleanup')}</h3>
           <div className="space-y-4">
             <div className="text-center">
               <div className="text-3xl font-bold text-green-600 mb-1">{analyticsData?.summary?.label_coverage || 0}%</div>
-              <div className="text-sm text-gray-600">Label Coverage</div>
+              <div className="text-sm text-gray-600">{t('analytics.labelCoverage')}</div>
             </div>
             
             <div className="text-center">
               <div className="text-3xl font-bold text-blue-600 mb-1">{analyticsData?.summary?.processing_rate || 0}%</div>
-              <div className="text-sm text-gray-600">Processed Rate</div>
+              <div className="text-sm text-gray-600">{t('analytics.processedRate')}</div>
             </div>
             
             <div className="text-center">
-              <div className="text-3xl font-bold text-purple-600 mb-1">2.5h</div>
-              <div className="text-sm text-gray-600">Time Saved This Week</div>
+              <div className="text-3xl font-bold text-purple-600 mb-1">
+                {Math.floor((analyticsData?.summary?.time_saved_seconds || 0) / 3600)}h {Math.floor(((analyticsData?.summary?.time_saved_seconds || 0) % 3600) / 60)}m
+              </div>
+              <div className="text-sm text-gray-600">{t('analytics.timeSaved')}</div>
             </div>
           </div>
         </div>

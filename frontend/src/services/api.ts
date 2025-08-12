@@ -142,8 +142,8 @@ export const chatApi = {
 
 // Analytics API
 export const analyticsApi = {
-  getOverview: async (days: number = 7) => {
-    const tzOffset = new Date().getTimezoneOffset();
+  getOverview: async (days: number = 7, tzOffsetOverride?: number) => {
+    const tzOffset = typeof tzOffsetOverride === 'number' ? tzOffsetOverride : new Date().getTimezoneOffset();
     const response = await api.get(`/analytics/overview?days=${days}&tz_offset=${tzOffset}`);
     return response.data;
   },

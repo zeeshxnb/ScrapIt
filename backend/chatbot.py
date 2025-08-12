@@ -508,9 +508,9 @@ async def get_quick_actions(
             "type": "secondary"
         },
         {
-            "id": "show_stats",
-            "label": "View Statistics",
-            "icon": "📊", 
+            "id": "go_to_ai",
+            "label": "Go to AI Assistant",
+            "icon": "💬", 
             "type": "secondary"
         }
     ])
