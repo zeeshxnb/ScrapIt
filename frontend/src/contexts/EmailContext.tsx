@@ -111,6 +111,21 @@ export const EmailProvider: React.FC<EmailProviderProps> = ({ children }) => {
     }
   };
 
+  const bulkDeleteEmails = async (emailIds: string[], permanent: boolean = false) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const result = await aiApi.bulkDeleteEmails(emailIds, permanent);
+      toast.success(`Deleted ${result.count || 0} emails`);
+      await Promise.all([fetchEmails(), fetchSummary()]);
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete emails');
+      toast.error('Failed to delete emails');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const value: EmailContextType = {
     emails,
     summary,
@@ -122,6 +137,7 @@ export const EmailProvider: React.FC<EmailProviderProps> = ({ children }) => {
     classifyEmails,
     deleteSpamEmails,
     searchEmails,
+    bulkDeleteEmails,
   };
 
   return (

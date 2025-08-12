@@ -91,6 +91,14 @@ export const aiApi = {
     const response = await api.delete('/ai/spam');
     return response.data;
   },
+
+  bulkDeleteEmails: async (emailIds: string[], permanent: boolean = false) => {
+    const response = await api.post('/ai/bulk/delete', {
+      email_ids: emailIds,
+      permanent,
+    });
+    return response.data;
+  },
 };
 
 // Chat API
@@ -142,11 +150,6 @@ export const analyticsApi = {
 
   getTrends: async (period: string = '30d') => {
     const response = await api.get(`/analytics/trends?period=${period}`);
-    return response.data;
-  },
-
-  getActivity: async (limit: number = 10) => {
-    const response = await api.get(`/analytics/activity?limit=${limit}`);
     return response.data;
   },
 };

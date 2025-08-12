@@ -41,11 +41,61 @@ async def get_analytics_overview(
     # Totals
     period_emails = period_query.count()
     spam_emails = period_query.filter(Email.is_spam == True).count()
-    # Unprocessed: no category and (no labels or empty)
-    unprocessed_emails = period_query.filter(
-        Email.category.is_(None),
-        or_(Email.labels.is_(None), Email.labels == [])
-    ).count()
+
+    # Build label id -> name map and user label id set to distinguish system labels
+    label_name_by_id = {}
+    user_label_ids = set()
+    try:
+        glabels = GmailService(current_user).get_labels()
+        for lbl in glabels or []:
+            label_name_by_id[lbl.get('id')] = lbl.get('name')
+            if lbl.get('type') == 'user':
+                user_label_ids.add(lbl.get('id'))
+    except Exception:
+        pass
+
+    # Unprocessed definition:
+    # - No explicit category
+    # - AND no user-created labels applied (system labels like INBOX/SOCIAL/PROMOTIONS don't count)
+    SYSTEM_LABELS = {
+        'INBOX', 'SPAM', 'TRASH', 'SENT', 'DRAFT',
+        'CATEGORY_UPDATES', 'CATEGORY_PERSONAL', 'CATEGORY_FORUMS',
+        'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'IMPORTANT',
+        'STARRED', 'UNREAD', 'YELLOW_STAR'
+    }
+
+    unprocessed_emails = 0
+    # Iterate minimal fields to evaluate rules accurately
+    for cat, labels, is_spam in period_query.with_entities(Email.category, Email.labels, Email.is_spam):
+        # Exclude spam from unprocessed
+        if is_spam:
+            continue
+        if cat is not None:
+            continue
+        if not labels:
+            unprocessed_emails += 1
+            continue
+        # Translate label ids to names when possible and check if any user label present
+        has_user_label = False
+        has_trash_or_spam = False
+        for lid in labels:
+            # If this is a known user label id, mark processed
+            if lid in user_label_ids:
+                has_user_label = True
+                break
+            name = label_name_by_id.get(lid, lid)
+            # Exclude TRASH/SPAM from unprocessed entirely
+            if name in { 'TRASH', 'SPAM' } or lid in { 'TRASH', 'SPAM' }:
+                has_trash_or_spam = True
+                break
+            if name not in SYSTEM_LABELS and name is not None:
+                has_user_label = True
+                break
+        if has_trash_or_spam:
+            # Consider trashed or spam emails as not unprocessed (excluded from this count)
+            continue
+        if not has_user_label:
+            unprocessed_emails += 1
     
     # Time-series data
     daily_stats = []
@@ -93,10 +143,14 @@ async def get_analytics_overview(
                 Email.received_date >= start_date
             ).group_by(yw_expr).order_by(yw_expr).all()
             for r in rows:
-                year, week = r.yw.split('-')
-                # Approximate start date of week as year-week Monday
+                try:
+                    year, week = r.yw.split('-')
+                    week_start = datetime.strptime(f"{year}-{week}-1", "%Y-%W-%w")
+                    date_str = week_start.strftime("%Y-%m-%d")
+                except Exception:
+                    date_str = f"{r.yw}-01"
                 daily_stats.append({
-                    "date": f"{year}-W{week}",
+                    "date": date_str,
                     "emails": int(r.cnt),
                     "spam": int(r.spam or 0)
                 })
@@ -222,6 +276,34 @@ async def get_analytics_overview(
         Email.labels.isnot(None),
         True if start_date is None else Email.received_date >= start_date
     ).count() / period_emails) * 100, 1) if period_emails > 0 else 0
+
+    # Previous period comparison (vs last period)
+    def pct_change(curr: float, prev: float) -> float:
+        if prev <= 0:
+            return 0.0
+        return round(((curr - prev) / prev) * 100, 1)
+
+    if start_date is None:
+        period_change = processed_change = unprocessed_change = label_cov_change = 0.0
+    else:
+        prev_start = start_date - timedelta(days=days)
+        prev_query = base_query.filter(Email.received_date >= prev_start, Email.received_date < start_date)
+        prev_total = prev_query.count()
+        prev_unprocessed = prev_query.filter(
+            Email.category.is_(None),
+            or_(Email.labels.is_(None), Email.labels == [])
+        ).count()
+        prev_processed = max(prev_total - prev_unprocessed, 0)
+        prev_label_cov = (db.query(Email).filter(
+            Email.user_id == current_user.id,
+            Email.labels.isnot(None),
+            Email.received_date >= prev_start,
+            Email.received_date < start_date
+        ).count() / prev_total * 100) if prev_total > 0 else 0.0
+        period_change = pct_change(period_emails, prev_total)
+        processed_change = pct_change(processed_emails, prev_processed)
+        unprocessed_change = pct_change(unprocessed_emails, prev_unprocessed)
+        label_cov_change = round(label_coverage - prev_label_cov, 1)
     
     # Recent activity (last 24 hours)
     recent_cutoff = datetime.now() - timedelta(hours=24)
@@ -245,7 +327,11 @@ async def get_analytics_overview(
             "processed_emails": processed_emails,
             "processing_rate": processing_rate,
             "label_coverage": label_coverage,
-            "period_days": 0 if start_date is None else days
+            "period_days": 0 if start_date is None else days,
+            "period_change": period_change,
+            "processed_change": processed_change,
+            "unprocessed_change": unprocessed_change,
+            "label_coverage_change": label_cov_change
         },
         "time_series": {
             "daily_volume": daily_stats,

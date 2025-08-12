@@ -14,7 +14,7 @@ import { Email } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner.tsx';
 
 const EmailsPage: React.FC = () => {
-  const { emails, fetchEmails, isLoading, deleteSpamEmails } = useEmail();
+  const { emails, fetchEmails, isLoading, deleteSpamEmails, bulkDeleteEmails } = useEmail();
   const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
@@ -56,9 +56,7 @@ const EmailsPage: React.FC = () => {
 
   const handleBulkDelete = async () => {
     if (selectedEmails.length === 0) return;
-    
-    // In a real app, this would call a bulk delete API
-    console.log('Bulk deleting emails:', selectedEmails);
+    await bulkDeleteEmails(selectedEmails, false);
     setSelectedEmails([]);
   };
 

@@ -32,7 +32,6 @@ const AnalyticsPage: React.FC = () => {
   const { summary, fetchSummary, isLoading } = useEmail();
   const [timeRange, setTimeRange] = useState('7d');
   const [analyticsData, setAnalyticsData] = useState<any>(null);
-  const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
   useEffect(() => {
@@ -60,14 +59,10 @@ const AnalyticsPage: React.FC = () => {
       const days = timeRange === 'lifetime' ? 0 : timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365;
       
       console.log(`📊 Fetching analytics for ${days} days`);
-      const [overview, activity] = await Promise.all([
-        analyticsApi.getOverview(days),
-        analyticsApi.getActivity(10)
-      ]);
+      const overview = await analyticsApi.getOverview(days);
       
-      console.log('✅ Analytics data loaded:', { overview, activity });
+      console.log('✅ Analytics data loaded:', { overview });
       setAnalyticsData(overview);
-      setRecentActivity(activity.activities || []);
     } catch (error) {
       console.error('❌ Failed to load analytics data:', error);
       console.error('Error details:', error.response?.data || error.message);
@@ -94,8 +89,8 @@ const AnalyticsPage: React.FC = () => {
     {
       name: 'Emails Received',
       value: analyticsData?.summary?.period_emails || 0,
-      change: '',
-      changeType: 'increase',
+      change: `${analyticsData?.summary?.period_change ?? 0}%`,
+      changeType: (analyticsData?.summary?.period_change || 0) >= 0 ? 'increase' : 'decrease',
       icon: EnvelopeIcon,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
@@ -103,8 +98,8 @@ const AnalyticsPage: React.FC = () => {
     {
       name: 'Processed',
       value: analyticsData?.summary?.processed_emails || 0,
-      change: '',
-      changeType: 'increase',
+      change: `${analyticsData?.summary?.processed_change ?? 0}%`,
+      changeType: (analyticsData?.summary?.processed_change || 0) >= 0 ? 'increase' : 'decrease',
       icon: ChartBarIcon,
       color: 'text-green-600',
       bgColor: 'bg-green-50',
@@ -112,8 +107,8 @@ const AnalyticsPage: React.FC = () => {
     {
       name: 'Unprocessed',
       value: analyticsData?.summary?.unprocessed_emails || 0,
-      change: '',
-      changeType: 'decrease',
+      change: `${analyticsData?.summary?.unprocessed_change ?? 0}%`,
+      changeType: (analyticsData?.summary?.unprocessed_change || 0) <= 0 ? 'decrease' : 'increase',
       icon: ClockIcon,
       color: 'text-yellow-600',
       bgColor: 'bg-yellow-50',
@@ -121,8 +116,8 @@ const AnalyticsPage: React.FC = () => {
     {
       name: 'Label Coverage',
       value: `${analyticsData?.summary?.label_coverage || 0}%`,
-      change: '',
-      changeType: 'increase',
+      change: `${analyticsData?.summary?.label_coverage_change ?? 0}%`,
+      changeType: (analyticsData?.summary?.label_coverage_change || 0) >= 0 ? 'increase' : 'decrease',
       icon: CalendarIcon,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
@@ -356,26 +351,7 @@ const AnalyticsPage: React.FC = () => {
       </div>
 
       {/* Recent Activity */}
-      <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-        <div className="space-y-3">
-          {recentActivity.length > 0 ? recentActivity.map((activity, index) => (
-            <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-              <div className={`w-2 h-2 rounded-full ${
-                activity.type === 'spam_deleted' ? 'bg-red-500' : 
-                activity.type === 'classified' ? 'bg-green-500' : 'bg-blue-500'
-              }`}></div>
-              <span className="text-sm text-gray-900">{activity.description}</span>
-              <span className="text-xs text-gray-500 ml-auto">{activity.time_ago}</span>
-            </div>
-          )) : (
-            <div className="text-center py-8 text-gray-500">
-              <p>No recent activity</p>
-              <p className="text-sm">Process some emails to see activity here</p>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Recent Activity removed by request */}
     </div>
   );
 };
