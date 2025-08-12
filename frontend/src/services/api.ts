@@ -135,7 +135,8 @@ export const chatApi = {
 // Analytics API
 export const analyticsApi = {
   getOverview: async (days: number = 7) => {
-    const response = await api.get(`/analytics/overview?days=${days}`);
+    const tzOffset = new Date().getTimezoneOffset();
+    const response = await api.get(`/analytics/overview?days=${days}&tz_offset=${tzOffset}`);
     return response.data;
   },
 

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, desc, or_
+from sqlalchemy import func, and_, desc, or_, case
 from database import get_db
 from models import Email, User
 from gmail import GmailService
@@ -26,6 +26,7 @@ async def test_analytics():
 @router.get("/overview")
 async def get_analytics_overview(
     days: int = Query(7, description="Number of days to analyze; use 0 for lifetime"),
+    tz_offset: int = Query(0, description="Client timezone offset in minutes (Date.getTimezoneOffset())"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -50,44 +51,77 @@ async def get_analytics_overview(
     daily_stats = []
     if start_date is None:
         # Lifetime: aggregate monthly
-        # Build YYYY-MM and count
+        ym_expr = func.strftime('%Y-%m', Email.received_date)
         months = db.query(
-            func.strftime('%Y-%m', Email.received_date).label('ym'),
+            ym_expr.label('ym'),
             func.count(Email.id).label('cnt'),
-            func.sum(func.case((Email.is_spam == True, 1), else_=0)).label('spam')
-        ).filter(Email.user_id == current_user.id).group_by('ym').order_by('ym').all()
+            func.sum(case((Email.is_spam == True, 1), else_=0)).label('spam')
+        ).filter(Email.user_id == current_user.id).group_by(ym_expr).order_by(ym_expr).all()
         for m in months:
-            # Render as first day of month for consistent x-scale
             daily_stats.append({
                 "date": f"{m.ym}-01",
                 "emails": int(m.cnt),
                 "spam": int(m.spam or 0)
             })
     else:
-        for i in range(days):
-            day_start = start_date + timedelta(days=i)
-            day_end = day_start + timedelta(days=1)
-            
-            day_total = base_query.filter(
-                and_(
-                    Email.received_date >= day_start,
-                    Email.received_date < day_end
-                )
-            ).count()
-            
-            day_spam = base_query.filter(
-                and_(
-                    Email.received_date >= day_start,
-                    Email.received_date < day_end,
-                    Email.is_spam == True
-                )
-            ).count()
-            
-            daily_stats.append({
-                "date": day_start.strftime("%Y-%m-%d"),
-                "emails": day_total,
-                "spam": day_spam
-            })
+        if days >= 300:
+            # About a year: monthly buckets
+            ym_expr = func.strftime('%Y-%m', Email.received_date)
+            rows = db.query(
+                ym_expr.label('ym'),
+                func.count(Email.id).label('cnt'),
+                func.sum(case((Email.is_spam == True, 1), else_=0)).label('spam')
+            ).filter(
+                Email.user_id == current_user.id,
+                Email.received_date >= start_date
+            ).group_by(ym_expr).order_by(ym_expr).all()
+            for r in rows:
+                daily_stats.append({
+                    "date": f"{r.ym}-01",
+                    "emails": int(r.cnt),
+                    "spam": int(r.spam or 0)
+                })
+        elif days >= 60:
+            # 2+ months: weekly buckets (Sunday-start using %W week number)
+            yw_expr = func.strftime('%Y-%W', Email.received_date)
+            rows = db.query(
+                yw_expr.label('yw'),
+                func.count(Email.id).label('cnt'),
+                func.sum(case((Email.is_spam == True, 1), else_=0)).label('spam')
+            ).filter(
+                Email.user_id == current_user.id,
+                Email.received_date >= start_date
+            ).group_by(yw_expr).order_by(yw_expr).all()
+            for r in rows:
+                year, week = r.yw.split('-')
+                # Approximate start date of week as year-week Monday
+                daily_stats.append({
+                    "date": f"{year}-W{week}",
+                    "emails": int(r.cnt),
+                    "spam": int(r.spam or 0)
+                })
+        else:
+            for i in range(days):
+                day_start = start_date + timedelta(days=i)
+                day_end = day_start + timedelta(days=1)
+                day_total = base_query.filter(
+                    and_(
+                        Email.received_date >= day_start,
+                        Email.received_date < day_end
+                    )
+                ).count()
+                day_spam = base_query.filter(
+                    and_(
+                        Email.received_date >= day_start,
+                        Email.received_date < day_end,
+                        Email.is_spam == True
+                    )
+                ).count()
+                daily_stats.append({
+                    "date": day_start.strftime("%Y-%m-%d"),
+                    "emails": day_total,
+                    "spam": day_spam
+                })
     
     # Categories: merge AI categories + user labels within period
     categories_map: Dict[str, int] = {}
@@ -97,7 +131,8 @@ async def get_analytics_overview(
         Email.category.isnot(None),
         True if start_date is None else Email.received_date >= start_date
     ).group_by(Email.category):
-        categories_map[cat] = categories_map.get(cat, 0) + cnt
+        name = 'Uncategorized' if (cat or '').lower() == 'unknown' else cat
+        categories_map[name] = categories_map.get(name, 0) + cnt
     # From labels – approximate: count every label string seen in labels JSON
     # Build label id -> name map and limit to user labels
     label_name_by_id = {}
@@ -225,9 +260,9 @@ async def get_analytics_overview(
             "recent_spam_deleted": recent_spam_deleted
         },
         "insights": {
-            "peak_email_hour": _peak_hour(period_query),
-            "busiest_day": _busiest_day(period_query),
-            "weekend_percentage": _weekend_pct(period_query)
+            "peak_email_hour": _peak_hour(period_query, tz_offset),
+            "busiest_day": _busiest_day(period_query, tz_offset),
+            "weekend_percentage": _weekend_pct(period_query, tz_offset)
         }
     }
 
@@ -339,19 +374,30 @@ async def get_recent_activity(
 ):
     """Get recent email processing activity"""
     
-    # Get recently processed emails
-    # No processed_date field; approximate recent activity by most recent received emails
-    recent_processed = db.query(Email).filter(
+    # Recent activity by most recent emails, infer action
+    recent_items = db.query(Email).filter(
         Email.user_id == current_user.id
     ).order_by(desc(Email.received_date)).limit(limit).all()
     
     activities = []
-    for email in recent_processed:
-        activity_type = "spam_deleted" if email.is_spam else "classified"
+    for email in recent_items:
+        if email.is_deleted:
+            activity_type = "deleted"
+        elif email.is_spam:
+            activity_type = "spam_deleted"
+        elif email.category or (email.labels and len(email.labels) > 0):
+            activity_type = "classified"
+        else:
+            activity_type = "received"
         
         activities.append({
             "type": activity_type,
-            "description": f"{'Deleted spam email' if email.is_spam else 'Classified email'} from {email.sender[:30]}{'...' if len(email.sender) > 30 else ''}",
+            "description": (
+                f"Deleted email from {email.sender[:30]}{'...' if len(email.sender) > 30 else ''}" if activity_type == 'deleted' else
+                f"Deleted spam email from {email.sender[:30]}{'...' if len(email.sender) > 30 else ''}" if activity_type == 'spam_deleted' else
+                f"Classified email from {email.sender[:30]}{'...' if len(email.sender) > 30 else ''}" if activity_type == 'classified' else
+                f"Received email from {email.sender[:30]}{'...' if len(email.sender) > 30 else ''}"
+            ),
             "category": email.category,
             "timestamp": email.received_date.isoformat() if email.received_date else None,
             "time_ago": _get_time_ago(email.received_date) if email.received_date else "Unknown"
@@ -381,28 +427,34 @@ def _get_time_ago(timestamp: datetime) -> str:
     else:
         return "Just now"
 
-def _peak_hour(query) -> str:
+def _peak_hour(query, tz_offset_minutes: int) -> str:
     hours = [
         (h, query.filter(func.strftime('%H', Email.received_date) == f"{h:02d}").count())
         for h in range(24)
     ]
     if not hours:
         return "-"
-    best = max(hours, key=lambda x: x[1])[0]
+    # shift by client offset (minutes east negative getTimezoneOffset)
+    shift = -int(tz_offset_minutes // 60)
+    shifted = [((h + shift) % 24, c) for h, c in hours]
+    best = max(shifted, key=lambda x: x[1])[0]
     hour12 = (best % 12) or 12
     ampm = "AM" if best < 12 else "PM"
     return f"{hour12}:00 {ampm}"
 
-def _busiest_day(query) -> str:
+def _busiest_day(query, tz_offset_minutes: int) -> str:
     days = [
         (d, query.filter(func.strftime('%w', Email.received_date) == str(d)).count()) for d in range(7)
     ]
     if not days:
         return "-"
+    # shift by number of days due to timezone offset (round hours/24)
+    shift_days = -int(round(tz_offset_minutes / 60 / 24))
+    shifted = [(((d + shift_days) % 7), c) for d, c in days]
     names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-    return names[max(days, key=lambda x: x[1])[0]]
+    return names[max(shifted, key=lambda x: x[1])[0]]
 
-def _weekend_pct(query) -> int:
+def _weekend_pct(query, tz_offset_minutes: int) -> int:
     total = query.count()
     if total == 0:
         return 0

@@ -296,9 +296,27 @@ async def google_callback_post(request: dict, db: Session = Depends(get_db)):
 @router.get("/me")
 async def get_user_info(current_user: User = Depends(get_current_user)):
     """Get current user info"""
+    # Try to fetch profile name from Google if possible
+    display_name = None
+    try:
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        creds = Credentials(
+            token=current_user.get_access_token(),
+            refresh_token=current_user.get_refresh_token(),
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=GOOGLE_CLIENT_ID,
+            client_secret=GOOGLE_CLIENT_SECRET,
+        )
+        service = build('oauth2', 'v2', credentials=creds)
+        info = service.userinfo().get().execute()
+        display_name = info.get('name')
+    except Exception:
+        pass
     return {
         "id": str(current_user.id),
         "email": current_user.email,
+        "name": display_name,
         "created_at": current_user.created_at.isoformat()
     }
 

@@ -18,6 +18,7 @@ const Header: React.FC = () => {
   };
 
   const displayName = React.useMemo(() => {
+    if (user?.name) return user.name.split(' ')[0];
     if (!user?.email) return 'User';
     const local = user.email.split('@')[0];
     const parts = local.split(/[._-]/).filter(Boolean);

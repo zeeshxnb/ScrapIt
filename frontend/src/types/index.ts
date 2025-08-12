@@ -3,6 +3,7 @@ export interface User {
   email: string;
   google_id: string;
   created_at: string;
+  name?: string;
 }
 
 export interface Email {

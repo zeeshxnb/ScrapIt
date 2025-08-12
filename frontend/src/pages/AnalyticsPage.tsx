@@ -230,10 +230,9 @@ const AnalyticsPage: React.FC = () => {
                 <YAxis />
                 <Tooltip 
                   labelFormatter={(value) => new Date(value).toLocaleDateString()}
-                  formatter={(value, name) => [value, name === 'emails' ? 'Total Emails' : 'Spam Emails']}
+                  formatter={(value, name) => [value, name === 'emails' ? 'Emails' : 'Spam']}
                 />
-                <Area type="monotone" dataKey="emails" stackId="1" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} />
-                <Area type="monotone" dataKey="spam" stackId="1" stroke="#ef4444" fill="#ef4444" fillOpacity={0.8} />
+                 <Area type="monotone" dataKey="emails" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
