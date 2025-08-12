@@ -17,14 +17,22 @@ const Header: React.FC = () => {
     await syncEmails();
   };
 
+  const displayName = React.useMemo(() => {
+    if (!user?.email) return 'User';
+    const local = user.email.split('@')[0];
+    const parts = local.split(/[._-]/).filter(Boolean);
+    if (parts.length >= 2) {
+      return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+    }
+    return local.charAt(0).toUpperCase() + local.slice(1);
+  }, [user?.email]);
+
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">
         {/* Left side - Page title will be handled by individual pages */}
         <div className="flex items-center space-x-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Welcome back, {user?.email?.split('@')[0] || 'User'}
-          </h2>
+          <h2 className="text-lg font-semibold text-gray-900">Welcome back, {displayName}</h2>
         </div>
 
         {/* Right side - Actions and user menu */}

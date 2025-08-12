@@ -12,6 +12,41 @@ import { chatApi } from '../services/api.ts';
 import LoadingSpinner from '../components/LoadingSpinner.tsx';
 import { QuickAction } from '../types';
 
+// Format sender names: map companies and derive person names
+const formatSenderName = (email: string): string => {
+  if (!email) return '';
+  const lower = email.toLowerCase();
+  const companyPatterns: Record<string, string> = {
+    'morning-brew': 'Morning Brew',
+    'morningbrew': 'Morning Brew',
+    'newsletter@': 'Newsletter',
+    'noreply@': 'System',
+    'no-reply@': 'System',
+    'support@': 'Support',
+    'hello@': 'Team',
+    'team@': 'Team',
+    'info@': 'Info',
+    'news@': 'News',
+    'updates@': 'Updates',
+  };
+  for (const [pattern, name] of Object.entries(companyPatterns)) {
+    if (lower.includes(pattern)) return name;
+  }
+  const atIndex = email.indexOf('@');
+  const localPart = atIndex > 0 ? email.slice(0, atIndex) : email;
+  // If local part has separators, treat as person name
+  const parts = localPart.split(/[._-]/).filter(Boolean);
+  const looksLikePerson = parts.length >= 2 && !/^(info|hello|contact|support|team|admin|sales|billing|no-?reply|newsletter)$/i.test(parts[0]);
+  if (looksLikePerson) {
+    return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+  }
+  // Fallback to domain name title case
+  const domain = atIndex > 0 ? email.slice(atIndex + 1) : '';
+  const domainParts = domain.split('.');
+  const domainName = domainParts.length > 1 ? domainParts[domainParts.length - 2] : domainParts[0] || localPart;
+  return domainName.charAt(0).toUpperCase() + domainName.slice(1);
+};
+
 const Dashboard: React.FC = () => {
   const { summary, fetchSummary, classifyEmails, deleteSpamEmails, isLoading } = useEmail();
   const [quickActions, setQuickActions] = useState<QuickAction[]>([]);
@@ -164,9 +199,37 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Email Categories */}
+      {/* Top Senders and Email Categories (swapped order) */}
       {summary?.categories && Object.keys(summary.categories).length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Top Senders (left) */}
+          <div className="card">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Top Senders</h2>
+            <div className="space-y-3">
+              {summary.recent_senders?.slice(0, 5).map((sender, index) => {
+                const displayName = formatSenderName(sender.sender);
+                return (
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                        <span className="text-xs font-medium text-gray-600">
+                          {displayName.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <span className="text-sm font-medium text-gray-900 truncate max-w-48">
+                        {displayName}
+                      </span>
+                    </div>
+                    <span className="text-sm text-gray-600">{sender.count}</span>
+                  </div>
+                );
+              }) || (
+                <p className="text-gray-500 text-sm">No sender data available</p>
+              )}
+            </div>
+          </div>
+
+          {/* Email Categories (right) */}
           <div className="card">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Email Categories</h2>
             <div className="space-y-3">
@@ -184,29 +247,6 @@ const Dashboard: React.FC = () => {
                     <span className="text-sm text-gray-600">{count}</span>
                   </div>
                 ))}
-            </div>
-          </div>
-
-          <div className="card">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Top Senders</h2>
-            <div className="space-y-3">
-              {summary.recent_senders?.slice(0, 5).map((sender, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                      <span className="text-xs font-medium text-gray-600">
-                        {sender.sender.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <span className="text-sm font-medium text-gray-900 truncate max-w-48">
-                      {sender.sender}
-                    </span>
-                  </div>
-                  <span className="text-sm text-gray-600">{sender.count}</span>
-                </div>
-              )) || (
-                <p className="text-gray-500 text-sm">No sender data available</p>
-              )}
             </div>
           </div>
         </div>

@@ -1,12 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import {
-  PaperAirplaneIcon,
-  SparklesIcon,
-  TrashIcon,
-  MagnifyingGlassIcon,
-  ChartBarIcon,
-  ArrowPathIcon,
-} from '@heroicons/react/24/outline';
+import { PaperAirplaneIcon, SparklesIcon, TrashIcon, ChartBarIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { chatApi } from '../services/api.ts';
 import { useEmail } from '../contexts/EmailContext.tsx';
 import LoadingSpinner from '../components/LoadingSpinner.tsx';
@@ -251,7 +244,23 @@ const ChatPage: React.FC = () => {
                         <SparklesIcon className="w-4 h-4 text-primary-600" />
                       </div>
                       <div className="bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200">
-                        <p className="text-sm text-gray-900 whitespace-pre-wrap">{message.response}</p>
+                        {(() => {
+                          const renderMessage = (text: string) => {
+                            const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                            // Escape, strip markdown bold, then bold numeric values after a colon
+                            const stripped = escape(text).replace(/\*\*/g, '');
+                            // Bold the first numeric token after a colon on each line
+                            const boldNumbers = stripped.replace(/(:\s*)([0-9][0-9,]*)/gm, '$1<strong>$2</strong>');
+                            const withBreaks = boldNumbers.replace(/\n/g, '<br/>');
+                            return { __html: withBreaks };
+                          };
+                          return (
+                            <p
+                              className="text-sm text-gray-900"
+                              dangerouslySetInnerHTML={renderMessage(message.response)}
+                            />
+                          );
+                        })()}
                       </div>
                     </div>
                     
@@ -270,23 +279,7 @@ const ChatPage: React.FC = () => {
                       </div>
                     )}
                     
-                    {/* Suggestions */}
-                    {message.suggestions && message.suggestions.length > 0 && (
-                      <div className="mt-3 ml-11">
-                        <p className="text-xs text-gray-500 mb-2">Try these:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {message.suggestions.map((suggestion, index) => (
-                            <button
-                              key={index}
-                              onClick={() => handleSuggestionClick(suggestion)}
-                              className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
-                            >
-                              {suggestion}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    {/* Suggestions removed from message bubble (quick actions remain below) */}
                     
                     <p className="text-xs text-gray-500 mt-1 ml-11">
                       {new Date(message.timestamp).toLocaleTimeString()}
@@ -322,7 +315,7 @@ const ChatPage: React.FC = () => {
       <div className="bg-white border-t border-gray-200 px-6 py-4">
         <div className="max-w-4xl mx-auto">
           {/* Suggestions */}
-          {suggestions.length > 0 && messages.length <= 1 && (
+          {suggestions.length > 0 && (
             <div className="mb-4">
               <p className="text-sm text-gray-600 mb-2">💡 Suggestions:</p>
               <div className="flex flex-wrap gap-2">

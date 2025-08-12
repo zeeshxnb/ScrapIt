@@ -57,7 +57,7 @@ const AnalyticsPage: React.FC = () => {
     try {
       setLoadingAnalytics(true);
       console.log('🔄 Loading analytics data...');
-      const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365;
+      const days = timeRange === 'lifetime' ? 0 : timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365;
       
       console.log(`📊 Fetching analytics for ${days} days`);
       const [overview, activity] = await Promise.all([
@@ -78,6 +78,13 @@ const AnalyticsPage: React.FC = () => {
 
   // Use real analytics data
   const categoryData = analyticsData?.categories || [];
+  const displayCategories = React.useMemo(() => {
+    const data = Array.isArray(categoryData) ? categoryData : [];
+    const other = data.find((d: any) => d.name === 'Other');
+    const top = data.filter((d: any) => d.name !== 'Other').slice(0, 8);
+    if (other) top.push(other);
+    return top;
+  }, [categoryData]);
   const emailVolumeData = analyticsData?.time_series?.daily_volume || [];
   const senderData = analyticsData?.top_senders || [];
 
@@ -85,36 +92,36 @@ const AnalyticsPage: React.FC = () => {
 
   const stats = [
     {
-      name: 'Total Emails',
-      value: analyticsData?.summary?.total_emails || summary?.total || 0,
-      change: '+12%',
+      name: 'Emails Received',
+      value: analyticsData?.summary?.period_emails || 0,
+      change: '',
       changeType: 'increase',
       icon: EnvelopeIcon,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
     },
     {
-      name: 'Spam Detected',
-      value: analyticsData?.summary?.spam_emails || summary?.spam || 0,
-      change: '-8%',
-      changeType: 'decrease',
-      icon: ExclamationTriangleIcon,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
-    },
-    {
-      name: 'Processing Rate',
-      value: `${analyticsData?.summary?.processing_rate || 0}%`,
-      change: '+5%',
+      name: 'Processed',
+      value: analyticsData?.summary?.processed_emails || 0,
+      change: '',
       changeType: 'increase',
       icon: ChartBarIcon,
       color: 'text-green-600',
       bgColor: 'bg-green-50',
     },
     {
-      name: 'Avg Daily Emails',
-      value: analyticsData?.summary?.avg_daily_emails || 0,
-      change: '+3%',
+      name: 'Unprocessed',
+      value: analyticsData?.summary?.unprocessed_emails || 0,
+      change: '',
+      changeType: 'decrease',
+      icon: ClockIcon,
+      color: 'text-yellow-600',
+      bgColor: 'bg-yellow-50',
+    },
+    {
+      name: 'Label Coverage',
+      value: `${analyticsData?.summary?.label_coverage || 0}%`,
+      change: '',
       changeType: 'increase',
       icon: CalendarIcon,
       color: 'text-purple-600',
@@ -166,10 +173,11 @@ const AnalyticsPage: React.FC = () => {
             onChange={(e) => setTimeRange(e.target.value)}
             className="input w-auto"
           >
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="90d">Last 90 days</option>
-            <option value="1y">Last year</option>
+             <option value="7d">Last 7 days</option>
+             <option value="30d">Last 30 days</option>
+             <option value="90d">Last 90 days</option>
+             <option value="1y">Last year</option>
+             <option value="lifetime">Lifetime</option>
           </select>
         </div>
       </div>
@@ -231,59 +239,39 @@ const AnalyticsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Category Distribution */}
+        {/* Category Distribution (readable horizontal bars) */}
         <div className="card">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Email Categories</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={categoryData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percentage }) => `${name} (${percentage}%)`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {categoryData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              <BarChart data={displayCategories} layout="vertical" margin={{ left: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" />
+                <YAxis dataKey="name" type="category" width={180} tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value) => [value as number, 'Emails']} />
+                <Bar dataKey="value" fill="#3b82f6">
+                  {displayCategories.map((entry: any, index: number) => (
+                    <Cell key={`bar-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
-                </Pie>
-                <Tooltip formatter={(value) => [value, 'Emails']} />
-              </PieChart>
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      {/* Top Senders Chart */}
-      <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Email Senders</h3>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={senderData} layout="horizontal">
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" />
-              <YAxis dataKey="name" type="category" width={150} />
-              <Tooltip formatter={(value) => [value, 'Emails']} />
-              <Bar dataKey="emails" fill="#3b82f6" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+        {/* Removed Top Senders */}
 
       {/* Detailed Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Email Processing Stats */}
         <div className="card">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Processing Status</h3>
-          <div className="space-y-4">
+            <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Processed</span>
               <span className="text-sm font-medium">
-                {analyticsData?.summary ? analyticsData.summary.total_emails - analyticsData.summary.unprocessed_emails : 0}
+                {analyticsData?.summary?.processed_emails || 0}
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
@@ -351,13 +339,13 @@ const AnalyticsPage: React.FC = () => {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Cleanup Efficiency</h3>
           <div className="space-y-4">
             <div className="text-center">
-              <div className="text-3xl font-bold text-green-600 mb-1">{analyticsData?.efficiency?.spam_detection_accuracy || 94}%</div>
-              <div className="text-sm text-gray-600">Spam Detection Accuracy</div>
+              <div className="text-3xl font-bold text-green-600 mb-1">{analyticsData?.summary?.label_coverage || 0}%</div>
+              <div className="text-sm text-gray-600">Label Coverage</div>
             </div>
             
             <div className="text-center">
-              <div className="text-3xl font-bold text-blue-600 mb-1">{analyticsData?.efficiency?.processing_accuracy || 87}%</div>
-              <div className="text-sm text-gray-600">Classification Accuracy</div>
+              <div className="text-3xl font-bold text-blue-600 mb-1">{analyticsData?.summary?.processing_rate || 0}%</div>
+              <div className="text-sm text-gray-600">Processed Rate</div>
             </div>
             
             <div className="text-center">

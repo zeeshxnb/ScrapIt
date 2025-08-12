@@ -247,6 +247,14 @@ class GmailService:
                             if existing.labels != email_data['labels']:
                                 existing.labels = email_data['labels']
                                 updated = True
+                            # If labels include a system/meaningful label, consider processed
+                            try:
+                                if existing.category or (email_data['labels'] and len(email_data['labels']) > 0):
+                                    if existing.is_processed is False:
+                                        existing.is_processed = True
+                                        updated = True
+                            except Exception:
+                                pass
                             
                             if updated:
                                 updated_count += 1
@@ -261,7 +269,7 @@ class GmailService:
                                 snippet=email_data['snippet'] or '',
                                 labels=email_data['labels'] or [],
                                 received_date=received_date,
-                                is_processed=False
+                                is_processed=True if (email_data['labels'] and len(email_data['labels']) > 0) else False
                             )
                             
                             db.add(email_record)

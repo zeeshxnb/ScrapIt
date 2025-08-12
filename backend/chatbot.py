@@ -3,24 +3,41 @@ Enhanced Email Management Chatbot
 Allows users to interact with their emails via natural language with advanced features
 """
 import os
-import openai
+from openai import OpenAI
 import requests
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, or_
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timedelta
 import json
 
 from database import get_db
+from gmail import GmailService
 from models import User, Email
 from auth import get_current_user
 
 router = APIRouter()
 
 # OpenAI setup
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+def _format_plain_text(text: str) -> str:
+    """Convert common markdown patterns to clean plain text for chat bubbles."""
+    if not text:
+        return ""
+    cleaned = text
+    # Remove bold/italic markers and headings
+    cleaned = cleaned.replace('**', '')
+    cleaned = cleaned.replace('*', '')
+    cleaned = cleaned.replace('### ', '')
+    cleaned = cleaned.replace('## ', '')
+    cleaned = cleaned.replace('# ', '')
+    # Collapse excess newlines
+    while '\n\n\n' in cleaned:
+        cleaned = cleaned.replace('\n\n\n', '\n\n')
+    return cleaned.strip()
 
 class ChatRequest(BaseModel):
     message: str
@@ -44,41 +61,78 @@ class EmailSummary(BaseModel):
 def get_email_summary(user: User, db: Session) -> EmailSummary:
     """Get comprehensive email summary for the user"""
     
-    # Get real Gmail count using Gmail API
-    try:
-        from googleapiclient.discovery import build
-        from google.oauth2.credentials import Credentials
-        import os
-        
-        # Get user's tokens
-        access_token = user.get_access_token()
-        refresh_token = user.get_refresh_token()
-        
-        if access_token:
-            # For now, let's use database count but sync it with real Gmail data
-            # We'll improve this when we get proper refresh tokens
-            total_emails = db.query(Email).filter(Email.user_id == user.id).count()
-        else:
-            # Fallback to database count if no access token
-            total_emails = db.query(Email).filter(Email.user_id == user.id).count()
-    except Exception as e:
-        print(f"Error accessing Gmail API: {e}")
-        # Fallback to database count
-        total_emails = db.query(Email).filter(Email.user_id == user.id).count()
+    # Use local database count; Gmail totals differ by folders and include sent/trash
+    total_emails = db.query(Email).filter(Email.user_id == user.id).count()
     
     # Database counts for processed emails
     spam_count = db.query(Email).filter(Email.user_id == user.id, Email.is_spam == True).count()
-    unprocessed = db.query(Email).filter(Email.user_id == user.id, Email.is_processed == False).count()
+    # Consider emails with category or any labels as processed
+    unprocessed = db.query(Email).filter(
+        Email.user_id == user.id,
+        Email.is_processed == False,
+        Email.category.is_(None),
+        or_(Email.labels.is_(None), Email.labels == [])
+    ).count()
     
-    # Category breakdown
-    categories = {}
-    category_results = db.query(Email.category, func.count(Email.id)).filter(
+    # Categories: merge explicit categories and Gmail labels for better coverage
+    categories: dict = {}
+    # 1) From AI categories
+    for category, count in db.query(Email.category, func.count(Email.id)).filter(
         Email.user_id == user.id,
         Email.category.isnot(None)
-    ).group_by(Email.category).all()
-    
-    for category, count in category_results:
-        categories[category] = count
+    ).group_by(Email.category):
+        categories[category] = categories.get(category, 0) + count
+    # 2) From Gmail labels (translate label IDs to human names)
+    label_name_by_id = {}
+    user_label_ids = set()
+    try:
+        service = GmailService(user)
+        for lbl in service.get_labels() or []:
+            label_id = lbl.get('id')
+            label_name_by_id[label_id] = lbl.get('name')
+            if lbl.get('type') == 'user':
+                user_label_ids.add(label_id)
+    except Exception:
+        pass
+
+    for labels_json, count in db.query(Email.labels, func.count(Email.id)).filter(
+        Email.user_id == user.id,
+        Email.labels.isnot(None)
+    ).group_by(Email.labels):
+        try:
+            for label in labels_json or []:
+                if not label:
+                    continue
+                # Only include USER-created labels to avoid massive Gmail auto categories
+                if label not in user_label_ids:
+                    continue
+                # Translate to label name if we have it
+                name = label_name_by_id.get(label, label)
+                # Normalize Gmail system category labels
+                system_map = {
+                    'INBOX': 'Inbox',
+                    'SPAM': 'Spam',
+                    'TRASH': 'Trash',
+                    'SENT': 'Sent',
+                    'DRAFT': 'Draft',
+                    'CATEGORY_UPDATES': 'Updates',
+                    'CATEGORY_PERSONAL': 'Personal',
+                    'CATEGORY_FORUMS': 'Forums',
+                    'CATEGORY_PROMOTIONS': 'Promotions',
+                    'CATEGORY_SOCIAL': 'Social',
+                    'IMPORTANT': 'Important',
+                }
+                normalized = system_map.get(name, name)
+                # Skip noisy flags that shouldn't be categories
+                skip = {"UNREAD", "STARRED", "YELLOW_STAR"}
+                if isinstance(normalized, str) and normalized.upper() in skip:
+                    continue
+                # Clean up generic "Label_123..." to "Custom Label"
+                if isinstance(normalized, str) and normalized.upper().startswith('LABEL_'):
+                    normalized = 'Custom Label'
+                categories[normalized] = categories.get(normalized, 0) + count
+        except Exception:
+            continue
     
     # Top senders
     sender_results = db.query(Email.sender, func.count(Email.id)).filter(
@@ -171,15 +225,21 @@ def process_chat_message(message: str, user: User, db: Session, context: List[di
     system_context = f"""
     You are an intelligent email management assistant. The user has:
     - {email_summary.total} total emails
-    - {email_summary.spam} spam emails  
+    - {email_summary.spam} spam emails
     - {email_summary.unprocessed} unprocessed emails
     - Categories: {email_summary.categories}
     - Top senders: {[s['sender'] for s in email_summary.recent_senders[:3]]}
-    
+
+    Output style rules (always follow):
+    - Use short, skimmable lines with hyphen bullets
+    - Bold only labels/titles (e.g., **Category Name**), keep numbers unbolded
+    - Sort category lines in descending count, cap to top 12, then show "**Other Categories:**" with a few more
+    - Prefer user-created labels over Gmail's auto labels; do not list flags like UNREAD/STARRED
+    - Avoid headings beyond simple bolded titles; avoid code blocks
+    - Keep the answer fully self-contained and avoid truncation
+
     User intent detected: {intent}
     User message: {message}
-    
-    Respond naturally and helpfully. Be conversational but concise.
     """
     
     # Handle specific intents
@@ -217,7 +277,35 @@ def process_chat_message(message: str, user: User, db: Session, context: List[di
     elif intent == "show_stats":
         action = "show_stats"
         data = email_summary.dict()
-        ai_response = f"Here's your email overview: {email_summary.total} total emails, {email_summary.spam} spam, {email_summary.unprocessed} unprocessed."
+        # Build a concise, ordered plain-text summary (no markdown), avoid truncation
+        categories_items = sorted(
+            [(k, v) for k, v in email_summary.categories.items() if k],
+            key=lambda kv: kv[1],
+            reverse=True,
+        )
+        inbox_count = 0
+        for name, cnt in categories_items:
+            if str(name).lower() == "inbox":
+                inbox_count = cnt
+                break
+        top_n = 12
+        top_lines = [f"- **{name}**: {cnt}" for name, cnt in categories_items[:top_n]]
+        other_lines = [f"- **{name}**: {cnt}" for name, cnt in categories_items[top_n:top_n+8]]  # cap output
+        header = [
+            f"- **Total Emails**: {email_summary.total}",
+            f"- **Spam Emails**: {email_summary.spam}",
+            f"- **Unprocessed Emails**: {email_summary.unprocessed}",
+            f"- **Emails in Inbox**: {inbox_count}",
+            "",
+            "**Categories (top first):**",
+        ]
+        if not top_lines:
+            top_lines = ["- No categories detected"]
+        if other_lines:
+            other_header = ["", "**Other Categories:**"]
+        else:
+            other_header = []
+        ai_response = "\n".join(header + top_lines + other_header + other_lines)
     
     elif intent == "sync_emails":
         action = "sync_emails"
@@ -253,18 +341,23 @@ Just ask me naturally - I understand conversational language!"""
     else:
         # Use AI for general conversation
         try:
-            response = openai.ChatCompletion.create(
-                model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
+            response = client.chat.completions.create(
+                model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
                 messages=[
                     {"role": "system", "content": system_context},
                     {"role": "user", "content": message}
                 ],
                 max_tokens=200,
-                temperature=0.7
+                temperature=0.7,
             )
-            ai_response = response.choices[0].message.content.strip()
-        except Exception as e:
-            ai_response = f"I'm having trouble processing that right now. Could you try rephrasing? Error: {str(e)}"
+            content = response.choices[0].message.content or ""
+            # Normalize markdown to plain text
+            ai_response = _format_plain_text(content)
+        except Exception:
+            ai_response = (
+                "I'm having trouble processing that right now. Could you try rephrasing?"
+            )
+    
     
     # Add contextual suggestions
     if not suggestions:
