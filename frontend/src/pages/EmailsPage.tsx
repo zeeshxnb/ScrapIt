@@ -20,7 +20,7 @@ const EmailsPage: React.FC = () => {
   const [timeZone, setTimeZone] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    fetchEmails();
+    fetchEmails({ limit: pageSize * 4, offset: 0 });
     try {
       const prefs = getPrefs();
       setPageSize(parseInt(String(prefs.emailsPerPage || 50)));
@@ -29,6 +29,15 @@ const EmailsPage: React.FC = () => {
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Ensure enough emails are loaded to fill current page after filtering
+  useEffect(() => {
+    const requiredCount = page * pageSize * 2; // buffer to offset filtered-out spam/trash
+    if (emails.length < requiredCount) {
+      fetchEmails({ limit: Math.min(1000, requiredCount), offset: 0 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize]);
 
   useEffect(() => {
     // Live updates when preferences change
@@ -63,8 +72,9 @@ const EmailsPage: React.FC = () => {
     const matchesCategory = filterCategory === 'all' || email.category === filterCategory;
     const matchesSpam = filterSpam === null || email.is_spam === filterSpam;
     const matchesLabel = filterLabel === 'all' || (email.labels || []).some(l => normalizeLabel(l) === filterLabel);
+    const matchesSender = senderFilter === 'all' || email.sender === senderFilter;
     
-    return matchesSearch && matchesCategory && matchesSpam && matchesLabel;
+    return matchesSearch && matchesCategory && matchesSpam && matchesLabel && matchesSender;
   });
 
   const categories = [...new Set(emails.map(email => email.category).filter(Boolean))];
@@ -143,7 +153,7 @@ const EmailsPage: React.FC = () => {
         <div>
            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('emails.title')}</h1>
            <p className="text-gray-600 dark:text-gray-300">
-             {filteredEmails.length} matching • page {page} of {totalPages}
+             {filteredEmails.length} {t('emails.matchingLabel') || 'matching'} • {t('emails.page') || 'page'} {page} {t('emails.of') || 'of'} {totalPages}
            </p>
         </div>
         
@@ -158,7 +168,7 @@ const EmailsPage: React.FC = () => {
                 className="btn-danger flex items-center space-x-2"
               >
                 <TrashIcon className="w-4 h-4" />
-                <span>Delete</span>
+                <span>{t('emails.delete')}</span>
               </button>
             </div>
           )}
@@ -178,15 +188,9 @@ const EmailsPage: React.FC = () => {
         {/* Search */}
         <div className="relative">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-           <input
+          <input
             type="text"
-            placeholder={
-              // simple i18n for placeholder
-              (getPrefs().language === 'es' && 'Busca por asunto, remitente o contenido...') ||
-              (getPrefs().language === 'fr' && 'Rechercher par objet, expéditeur ou contenu...') ||
-              (getPrefs().language === 'de' && 'Suche nach Betreff, Absender oder Inhalt...') ||
-              'Search emails by subject, sender, or content...'
-            }
+            placeholder={t('emails.search.placeholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="input pl-10"
@@ -285,7 +289,7 @@ const EmailsPage: React.FC = () => {
             className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
           />
           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Select All
+            {t('emails.selectAll')}
           </span>
         </div>
 
@@ -326,13 +330,13 @@ const EmailsPage: React.FC = () => {
                         {email.is_spam && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">
                             <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
-                            Spam
+                            {t('emails.spam')}
                           </span>
                         )}
                         {!email.is_processed && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300">
                             <ClockIcon className="w-3 h-3 mr-1" />
-                            Unprocessed
+                            {t('emails.unprocessed')}
                           </span>
                         )}
                         {email.category && (
@@ -358,7 +362,7 @@ const EmailsPage: React.FC = () => {
                     {email.confidence_score && (
                       <div className="mt-2 flex items-center space-x-2">
                         <span className="text-xs text-gray-500">
-                          AI Confidence:
+                          {t('emails.aiConfidence')}
                         </span>
                         <div className="flex-1 bg-gray-200 rounded-full h-1.5 max-w-20">
                           <div
@@ -376,13 +380,13 @@ const EmailsPage: React.FC = () => {
                   <div className="flex items-center space-x-2">
                     <button
                       className="p-1 text-gray-400 hover:text-gray-600 rounded"
-                      title="Archive"
+                      title={t('emails.archive')}
                     >
                       <ArchiveBoxIcon className="w-4 h-4" />
                     </button>
                     <button
                       className="p-1 text-gray-400 hover:text-red-600 rounded"
-                      title="Delete"
+                      title={t('emails.delete')}
                     >
                       <TrashIcon className="w-4 h-4" />
                     </button>
@@ -397,7 +401,7 @@ const EmailsPage: React.FC = () => {
       {/* Pagination */}
       {filteredEmails.length > 0 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-700">
+          <p className="text-sm text-gray-700 dark:text-gray-300">
             Showing <span className="font-medium">{(page - 1) * pageSize + 1}</span> to{' '}
             <span className="font-medium">{Math.min(page * pageSize, filteredEmails.length)}</span> of{' '}
             <span className="font-medium">{filteredEmails.length}</span> results

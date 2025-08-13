@@ -17,7 +17,7 @@ from chatbot import chatbot_router
 from analytics import router as analytics_router
 
 app = FastAPI(
-    title="ScrapIt - Email Cleaner",
+    title="ScrapIt",
     description="AI-powered email cleaning and organization",
     version="1.0.0"
 )

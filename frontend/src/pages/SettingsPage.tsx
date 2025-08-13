@@ -54,17 +54,17 @@ const SettingsPage: React.FC = () => {
     localStorage.setItem('app_prefs', JSON.stringify({ profile, privacy, preferences }));
     // Also emit granular preferences change for live updates
     setPrefs(preferences);
-    window.dispatchEvent(new CustomEvent('app:notify', { detail: { text: 'Settings saved' } }));
-    toast.success('Settings saved successfully!');
+    window.dispatchEvent(new CustomEvent('app:notify', { detail: { text: t('settings.saved') } }));
+    toast.success(t('settings.saved'));
     checkAuth();
   };
 
   const [rerenderKey, setRerenderKey] = useState(0);
 
   const handleDeleteAccount = () => {
-    if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+    if (window.confirm(t('settings.deleteConfirm'))) {
       // In a real app, this would call the delete account API
-      toast.error('Account deletion is not implemented in this demo');
+      toast.error(t('settings.deleteNotImplemented'));
     }
   };
 
@@ -96,7 +96,7 @@ const SettingsPage: React.FC = () => {
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">{user?.email}</h3>
                   <p className="text-sm text-gray-600">
-                    Member since {new Date(user?.created_at || '').toLocaleDateString()}
+                    {t('settings.memberSince')}: {new Date(user?.created_at || '').toLocaleDateString()}
                   </p>
                 </div>
               </div>
@@ -149,18 +149,18 @@ const SettingsPage: React.FC = () => {
                   onChange={(e) => setPrivacy(prev => ({ ...prev, dataRetention: e.target.value }))}
                   className="input"
                 >
-                  <option value="3months">3 months</option>
-                  <option value="6months">6 months</option>
-                  <option value="1year">1 year</option>
-                  <option value="2years">2 years</option>
-                  <option value="forever">Keep forever</option>
+                  <option value="3months">{t('settings.retention.3months')}</option>
+                  <option value="6months">{t('settings.retention.6months')}</option>
+                  <option value="1year">{t('settings.retention.1year')}</option>
+                  <option value="2years">{t('settings.retention.2years')}</option>
+                  <option value="forever">{t('settings.retention.forever')}</option>
                 </select>
               </div>
               
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-sm font-medium text-gray-900">{t('settings.shareAnalytics')}</h4>
-                  <p className="text-sm text-gray-600">Help improve ScrapIt by sharing usage data</p>
+                  <p className="text-sm text-gray-600">{t('settings.shareAnalytics.help')}</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
@@ -176,7 +176,7 @@ const SettingsPage: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-sm font-medium text-gray-900">{t('settings.emailPreview')}</h4>
-                  <p className="text-sm text-gray-600">Show email snippets in the interface</p>
+                  <p className="text-sm text-gray-600">{t('settings.emailPreview.help')}</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
@@ -206,9 +206,9 @@ const SettingsPage: React.FC = () => {
                   onChange={(e) => setPreferences(prev => ({ ...prev, theme: e.target.value }))}
                   className="input"
                 >
-                  <option value="light">Light</option>
-                  <option value="dark">Dark</option>
-                  <option value="auto">Auto (System)</option>
+                  <option value="light">{t('settings.theme.light')}</option>
+                  <option value="dark">{t('settings.theme.dark')}</option>
+                  <option value="auto">{t('settings.theme.auto')}</option>
                 </select>
               </div>
               
@@ -223,6 +223,8 @@ const SettingsPage: React.FC = () => {
                   <option value="es">Spanish</option>
                   <option value="fr">French</option>
                   <option value="de">German</option>
+                  <option value="ar">Arabic</option>
+                  <option value="hi">Hindi</option>
                 </select>
               </div>
               
@@ -233,10 +235,10 @@ const SettingsPage: React.FC = () => {
                   onChange={(e) => setPreferences(prev => ({ ...prev, timezone: e.target.value }))}
                   className="input"
                 >
-                    <option value="auto">Auto-detect</option>
-                    <option value="utc">UTC</option>
-                    <option value="est">US/Eastern</option>
-                    <option value="pst">US/Pacific</option>
+                    <option value="auto">{t('settings.timezone.auto')}</option>
+                    <option value="utc">{t('settings.timezone.utc')}</option>
+                    <option value="est">{t('settings.timezone.est')}</option>
+                    <option value="pst">{t('settings.timezone.pst')}</option>
                   </select>
                 </div>
               
@@ -285,9 +287,7 @@ const SettingsPage: React.FC = () => {
           <div className="card border-red-200 bg-red-50">
             <h3 className="text-lg font-semibold text-red-900 mb-4">{t('settings.danger')}</h3>
             <div className="space-y-3">
-              <p className="text-sm text-red-700">
-                Once you delete your account, there is no going back. Please be certain.
-              </p>
+              <p className="text-sm text-red-700">{t('settings.deleteWarning')}</p>
               <button
                 onClick={handleDeleteAccount}
                 className="w-full btn-danger flex items-center justify-center space-x-2"

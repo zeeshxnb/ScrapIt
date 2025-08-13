@@ -150,28 +150,28 @@ const ChatPage: React.FC = () => {
   const quickActions = [
     {
       icon: TrashIcon,
-      label: `Delete ${summary?.spam || 0} Spam Emails`,
+      label: `${t('chat.quick.delete')} ${summary?.spam || 0} ${t('chat.quick.spamEmails')}`,
       action: () => sendMessage('Delete my spam emails'),
       color: 'text-red-600 bg-red-50 hover:bg-red-100',
       disabled: !summary?.spam,
     },
     {
       icon: SparklesIcon,
-      label: `Classify ${summary?.unprocessed || 0} Emails`,
+      label: `${t('chat.quick.classify')} ${summary?.unprocessed || 0} ${t('chat.quick.emails')}`,
       action: () => sendMessage('Classify my emails'),
       color: 'text-blue-600 bg-blue-50 hover:bg-blue-100',
       disabled: !summary?.unprocessed,
     },
     {
       icon: ChartBarIcon,
-      label: 'Show Email Stats',
+      label: t('chat.quick.showStats'),
       action: () => sendMessage('Show me my email statistics'),
       color: 'text-green-600 bg-green-50 hover:bg-green-100',
       disabled: false,
     },
     {
       icon: ArrowPathIcon,
-      label: 'Sync Latest Emails',
+      label: t('chat.quick.syncLatest'),
       action: () => sendMessage('Sync my latest emails'),
       color: 'text-purple-600 bg-purple-50 hover:bg-purple-100',
       disabled: false,
@@ -306,7 +306,7 @@ const ChatPage: React.FC = () => {
                 <div className="bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
                   <div className="flex items-center space-x-2">
                     <LoadingSpinner size="small" />
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Thinking...</span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">{t('chat.thinking')}</span>
                   </div>
                 </div>
               </div>
@@ -323,7 +323,7 @@ const ChatPage: React.FC = () => {
           {/* Suggestions */}
           {suggestions.length > 0 && (
             <div className="mb-4">
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">💡 Suggestions:</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">💡 {t('chat.suggestions')}</p>
               <div className="flex flex-wrap gap-2">
                 {suggestions.slice(0, 4).map((suggestion, index) => (
                   <button

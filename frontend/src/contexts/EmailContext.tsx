@@ -29,6 +29,7 @@ export const EmailProvider: React.FC<EmailProviderProps> = ({ children }) => {
       setError(null);
       const emailData = await gmailApi.getEmails(params);
       setEmails(emailData);
+      window.dispatchEvent(new CustomEvent('app:notify', { detail: { text: 'Emails loaded' } }));
     } catch (err: any) {
       setError(err.message || 'Failed to fetch emails');
       toast.error('Failed to fetch emails');
@@ -57,6 +58,7 @@ export const EmailProvider: React.FC<EmailProviderProps> = ({ children }) => {
       setError(null);
       await gmailApi.syncEmails();
       toast.success('Emails synced successfully');
+      window.dispatchEvent(new CustomEvent('app:notify', { detail: { text: 'Email sync completed' } }));
       // Refresh data after sync
       await Promise.all([fetchEmails(), fetchSummary()]);
     } catch (err: any) {
@@ -73,6 +75,7 @@ export const EmailProvider: React.FC<EmailProviderProps> = ({ children }) => {
       setError(null);
       const result = await aiApi.classifyEmails();
       toast.success(`Classified ${result.processed || 0} emails`);
+      window.dispatchEvent(new CustomEvent('app:notify', { detail: { text: `Classified ${result.processed || 0} emails` } }));
       // Refresh data after classification
       await Promise.all([fetchEmails(), fetchSummary()]);
     } catch (err: any) {
@@ -89,6 +92,7 @@ export const EmailProvider: React.FC<EmailProviderProps> = ({ children }) => {
       setError(null);
       const result = await aiApi.deleteSpamEmails();
       toast.success(`Deleted ${result.deleted_count || 0} spam emails`);
+      window.dispatchEvent(new CustomEvent('app:notify', { detail: { text: `Deleted ${result.deleted_count || 0} spam emails` } }));
       // Refresh data after deletion
       await Promise.all([fetchEmails(), fetchSummary()]);
     } catch (err: any) {
@@ -117,6 +121,7 @@ export const EmailProvider: React.FC<EmailProviderProps> = ({ children }) => {
       setError(null);
       const result = await aiApi.bulkDeleteEmails(emailIds, permanent);
       toast.success(`Deleted ${result.count || 0} emails`);
+      window.dispatchEvent(new CustomEvent('app:notify', { detail: { text: `Deleted ${result.count || 0} emails` } }));
       await Promise.all([fetchEmails(), fetchSummary()]);
     } catch (err: any) {
       setError(err.message || 'Failed to delete emails');

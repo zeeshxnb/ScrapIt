@@ -109,7 +109,7 @@ const Dashboard: React.FC = () => {
 
   const stats = [
     {
-      name: 'Total Emails',
+      name: t('dashboard.stats.total'),
       value: summary?.total || 0,
       icon: EnvelopeIcon,
       color: 'text-primary-600',
@@ -117,7 +117,7 @@ const Dashboard: React.FC = () => {
       bgColor: 'bg-primary-50',
     },
     {
-      name: 'Spam Emails',
+      name: t('dashboard.stats.spam'),
       value: summary?.spam || 0,
       icon: ExclamationTriangleIcon,
       color: 'text-red-600',
@@ -125,7 +125,7 @@ const Dashboard: React.FC = () => {
       bgColor: 'bg-red-50',
     },
     {
-      name: 'Unprocessed',
+      name: t('dashboard.stats.unprocessed'),
       value: summary?.unprocessed || 0,
       icon: ClockIcon,
       color: 'text-yellow-600',
@@ -133,7 +133,7 @@ const Dashboard: React.FC = () => {
       bgColor: 'bg-yellow-50',
     },
     {
-      name: 'Categories',
+      name: t('dashboard.stats.categories'),
       value: Object.keys(summary?.categories || {}).length,
       icon: ChartBarIcon,
       color: 'text-green-600',
@@ -202,9 +202,14 @@ const Dashboard: React.FC = () => {
               <div className="flex items-center space-x-3">
                 <span className="text-2xl">{action.icon}</span>
                 <div className="text-left">
-                  <p className="font-medium text-gray-900 dark:text-gray-100">{action.label}</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">
+                    {action.id === 'delete_spam' ? `${t('chat.quick.delete')} ${summary?.spam || 0} ${t('chat.quick.spamEmails')}` :
+                     action.id === 'classify_emails' ? `${t('chat.quick.classify')} ${summary?.unprocessed || 0} ${t('chat.quick.emails')}` :
+                     action.id === 'sync_emails' ? t('chat.quick.syncLatest') :
+                     action.id === 'go_to_ai' ? t('nav.chat') : action.label}
+                  </p>
                   {action.count && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{action.count} items</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{action.count} {t('dashboard.items') || 'items'}</p>
                   )}
                 </div>
               </div>
@@ -235,7 +240,7 @@ const Dashboard: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Top Senders (left) */}
           <div className="card">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Top Senders</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('dashboard.topSenders') || 'Top Senders'}</h2>
             <div className="space-y-3">
               {summary.recent_senders?.slice(0, 5).map((sender, index) => {
                 const displayName = formatSenderName(sender.sender);
@@ -255,14 +260,14 @@ const Dashboard: React.FC = () => {
                   </div>
                 );
               }) || (
-                <p className="text-gray-500 text-sm">No sender data available</p>
+                <p className="text-gray-500 text-sm">{t('emails.noEmails')}</p>
               )}
             </div>
           </div>
 
           {/* Email Categories (right) */}
           <div className="card">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Email Categories</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('dashboard.emailCategories') || t('analytics.chart.categories')}</h2>
             <div className="space-y-3">
               {Object.entries(summary.categories)
                 .sort(([, a], [, b]) => b - a)

@@ -64,7 +64,7 @@ const Sidebar: React.FC = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">ScrapIt</h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Email Cleaner</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{t('app.tagline')}</p>
           </div>
         </div>
       </div>

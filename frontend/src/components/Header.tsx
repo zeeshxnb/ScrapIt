@@ -7,7 +7,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useEmail } from '../contexts/EmailContext.tsx';
-import { onPrefsChange } from '../i18n.ts';
+import { onPrefsChange, t } from '../i18n.ts';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
@@ -32,12 +32,13 @@ const Header: React.FC = () => {
     return local.charAt(0).toUpperCase() + local.slice(1);
   }, [user?.email, user?.name]);
 
+  const [_langTick, setLangTick] = useState(0);
   const greeting = React.useMemo(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  }, []);
+    if (hour < 12) return t('greeting.morning');
+    if (hour < 17) return t('greeting.afternoon');
+    return t('greeting.evening');
+  }, [_langTick]);
 
   React.useEffect(() => {
     const handler = (e: any) => {
@@ -51,8 +52,6 @@ const Header: React.FC = () => {
       unsub();
     };
   }, []);
-
-  const [_langTick, setLangTick] = useState(0);
 
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900 dark:border-gray-800">
@@ -69,30 +68,30 @@ const Header: React.FC = () => {
             onClick={handleSync}
             disabled={isLoading}
             className="btn-secondary flex items-center space-x-2"
-            title="Sync emails from Gmail"
+            title={t('header.sync')}
           >
             <ArrowPathIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>Sync</span>
+            <span>{t('header.sync')}</span>
           </button>
 
           {/* Notifications */}
           <div className="relative">
-            <button onClick={() => setShowNotifications(s => !s)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+            <button onClick={() => setShowNotifications(s => !s)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:text-gray-300 dark:hover:text-gray-100 dark:hover:bg-gray-800">
               <BellIcon className="w-5 h-5" />
             </button>
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-900">Notifications</span>
-                  <button className="text-xs text-gray-500" onClick={() => setNotifications([])}>Clear</button>
+              <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50 dark:bg-gray-900 dark:border-gray-700">
+                <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between dark:border-gray-800">
+                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('header.notifications')}</span>
+                  <button className="text-xs text-gray-500 dark:text-gray-400" onClick={() => setNotifications([])}>{t('header.notifications.clear')}</button>
                 </div>
                 <div className="max-h-80 overflow-auto">
                   {notifications.length === 0 ? (
-                    <div className="px-4 py-6 text-sm text-gray-500">No notifications yet</div>
+                    <div className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">{t('header.notifications.none')}</div>
                   ) : notifications.map(n => (
                     <div key={n.id} className="px-4 py-2 text-sm">
-                      <div className="text-gray-900">{n.text}</div>
-                      <div className="text-xs text-gray-500">{n.time}</div>
+                      <div className="text-gray-900 dark:text-gray-100">{n.text}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{n.time}</div>
                     </div>
                   ))}
                 </div>
@@ -104,21 +103,21 @@ const Header: React.FC = () => {
           <div className="relative">
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100"
+              className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
             >
-              <UserCircleIcon className="w-6 h-6 text-gray-400" />
-              <span className="text-sm font-medium text-gray-700">
+              <UserCircleIcon className="w-6 h-6 text-gray-400 dark:text-gray-300" />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
                 {user?.email?.split('@')[0]}
               </span>
-              <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+              <ChevronDownIcon className="w-4 h-4 text-gray-400 dark:text-gray-300" />
             </button>
 
             {/* Dropdown menu */}
             {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
-                <div className="px-4 py-2 border-b border-gray-100">
-                  <p className="text-sm font-medium text-gray-900">{user?.email}</p>
-                  <p className="text-xs text-gray-500">Signed in with Google</p>
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 dark:bg-gray-900 dark:border-gray-700">
+                <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user?.email}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('header.signedInWithGoogle')}</p>
                 </div>
                 
                 <button
@@ -126,9 +125,9 @@ const Header: React.FC = () => {
                     logout();
                     setShowUserMenu(false);
                   }}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
                 >
-                  Sign out
+                  {t('header.signOut')}
                 </button>
               </div>
             )}

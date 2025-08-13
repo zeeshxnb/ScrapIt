@@ -517,5 +517,34 @@ async def get_quick_actions(
     
     return {"actions": actions}
 
+
+@router.get("/self-test")
+async def chatbot_self_test(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Run a deterministic self-test of core intents without external AI calls."""
+    test_messages = [
+        "delete spam",
+        "classify emails",
+        "show stats",
+        "sync emails",
+        "help",
+    ]
+    results = []
+    for msg in test_messages:
+        try:
+            resp = process_chat_message(msg, current_user, db)
+            results.append({
+                "message": msg,
+                "response": resp.response,
+                "action": resp.action,
+                "has_quick_actions": bool(resp.quick_actions),
+                "suggestions": resp.suggestions,
+            })
+        except Exception as e:
+            results.append({"message": msg, "error": str(e)})
+    return {"ok": True, "cases": results}
+
 # Export router
 chatbot_router = router

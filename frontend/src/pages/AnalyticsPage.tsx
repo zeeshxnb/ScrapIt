@@ -79,7 +79,7 @@ const AnalyticsPage: React.FC = () => {
 
   const stats = [
     {
-      name: 'Emails Received',
+      name: t('analytics.emailsReceived') || 'Emails Received',
       value: analyticsData?.summary?.period_emails || 0,
       change: `${analyticsData?.summary?.period_change ?? 0}%`,
       changeType: (analyticsData?.summary?.period_change || 0) >= 0 ? 'increase' : 'decrease',
@@ -89,7 +89,7 @@ const AnalyticsPage: React.FC = () => {
       bgColor: 'bg-blue-50',
     },
     {
-      name: 'Processed',
+      name: t('analytics.processed'),
       value: analyticsData?.summary?.processed_emails || 0,
       change: `${analyticsData?.summary?.processed_change ?? 0}%`,
       changeType: (analyticsData?.summary?.processed_change || 0) >= 0 ? 'increase' : 'decrease',
@@ -99,7 +99,7 @@ const AnalyticsPage: React.FC = () => {
       bgColor: 'bg-green-50',
     },
     {
-      name: 'Unprocessed',
+      name: t('analytics.unprocessed'),
       value: analyticsData?.summary?.unprocessed_emails || 0,
       change: `${analyticsData?.summary?.unprocessed_change ?? 0}%`,
       changeType: (analyticsData?.summary?.unprocessed_change || 0) <= 0 ? 'decrease' : 'increase',
@@ -109,7 +109,7 @@ const AnalyticsPage: React.FC = () => {
       bgColor: 'bg-yellow-50',
     },
     {
-      name: 'Label Coverage',
+      name: t('analytics.labelCoverage'),
       value: `${analyticsData?.summary?.label_coverage || 0}%`,
       change: `${analyticsData?.summary?.label_coverage_change ?? 0}%`,
       changeType: (analyticsData?.summary?.label_coverage_change || 0) >= 0 ? 'increase' : 'decrease',
@@ -120,7 +120,7 @@ const AnalyticsPage: React.FC = () => {
     },
   ];
 
-  if ((isLoading && !summary) || (loadingAnalytics && !analyticsData)) {
+  if (loadingAnalytics && !analyticsData) {
     return (
       <div className="flex items-center justify-center h-64">
         <LoadingSpinner size="large" />
@@ -133,13 +133,13 @@ const AnalyticsPage: React.FC = () => {
       {/* Debug Info */}
       {loadingAnalytics && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 dark:bg-gray-800 dark:border-gray-700">
-          <p className="text-blue-800 text-sm dark:text-gray-100">🔄 Loading analytics data...</p>
+          <p className="text-blue-800 text-sm dark:text-gray-100">🔄 {t('analytics.loading')}</p>
         </div>
       )}
       
       {!analyticsData && !loadingAnalytics && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-          <p className="text-yellow-800 text-sm">⚠️ No analytics data loaded. Check console for errors.</p>
+          <p className="text-yellow-800 text-sm">⚠️ {t('analytics.noData')}</p>
         </div>
       )}
 
@@ -157,7 +157,7 @@ const AnalyticsPage: React.FC = () => {
             disabled={loadingAnalytics}
             className="btn btn-secondary"
           >
-            {loadingAnalytics ? 'Loading...' : t('analytics.refresh')}
+            {loadingAnalytics ? t('analytics.loading') : t('analytics.refresh')}
           </button>
           <select
             value={timeRange}
@@ -193,7 +193,7 @@ const AnalyticsPage: React.FC = () => {
                     }`}>
                       {stat.change}
                     </span>
-                    <span className="text-sm text-gray-500 ml-1">vs last period</span>
+                    <span className="text-sm text-gray-500 ml-1">{t('analytics.vsLastPeriod')}</span>
                   </div>
                 </div>
                 <div className={`p-3 rounded-lg ${stat.bgColor} dark:bg-gray-800 dark:border dark:border-gray-700`}>
@@ -216,12 +216,16 @@ const AnalyticsPage: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="date" 
-                  tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  tickFormatter={(value) => {
+                    const prefs = JSON.parse(localStorage.getItem('app_prefs') || '{}');
+                    const lang = prefs?.preferences?.language || 'en';
+                    return new Date(value).toLocaleDateString(lang, { month: 'short', day: 'numeric' });
+                  }}
                 />
                 <YAxis />
                 <Tooltip 
                   labelFormatter={(value) => new Date(value).toLocaleDateString()}
-                  formatter={(value, name) => [value, name === 'emails' ? 'Emails' : 'Spam']}
+                  formatter={(value, name) => [value, name === 'emails' ? t('analytics.tooltip.emails') : t('analytics.tooltip.spam')]}
                   contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', color: '#F3F4F6' }}
                   itemStyle={{ color: '#93C5FD' }}
                   labelStyle={{ color: '#D1D5DB' }}
@@ -315,7 +319,11 @@ const AnalyticsPage: React.FC = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">{t('analytics.busiestDay')}</span>
-              <span className="text-sm font-medium">{analyticsData?.insights?.busiest_day || 'Tuesday'}</span>
+              <span className="text-sm font-medium">{
+                analyticsData?.insights?.busiest_day
+                  ? t(`day.${String(analyticsData.insights.busiest_day).toLowerCase()}`)
+                  : t('day.tuesday')
+              }</span>
             </div>
             {/* Avg Response Time removed (not reliable without thread analysis) */}
             <div className="flex items-center justify-between">
