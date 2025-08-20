@@ -92,6 +92,9 @@ export interface EmailContextType {
   deleteSpamEmails: () => Promise<void>;
   searchEmails: (query: string, filters?: EmailFilters) => Promise<Email[]>;
   bulkDeleteEmails: (emailIds: string[], permanent?: boolean) => Promise<void>;
+  bulkArchiveEmails: (emailIds: string[]) => Promise<void>;
+  deleteEmail: (emailId: string) => Promise<void>;
+  archiveEmail: (emailId: string) => Promise<void>;
 }
 
 export interface EmailFetchParams {

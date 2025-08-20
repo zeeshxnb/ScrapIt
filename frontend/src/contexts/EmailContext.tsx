@@ -131,6 +131,56 @@ export const EmailProvider: React.FC<EmailProviderProps> = ({ children }) => {
     }
   };
 
+  const deleteEmail = async (emailId: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const result = await aiApi.deleteEmail(emailId);
+      toast.success('Email moved to trash');
+      window.dispatchEvent(new CustomEvent('app:notify', { detail: { text: 'Email moved to trash' } }));
+      // Refresh data after deletion
+      await Promise.all([fetchEmails(), fetchSummary()]);
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete email');
+      toast.error('Failed to delete email');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const archiveEmail = async (emailId: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const result = await aiApi.archiveEmail(emailId);
+      toast.success('Email archived');
+      window.dispatchEvent(new CustomEvent('app:notify', { detail: { text: 'Email archived' } }));
+      // Refresh data after archiving
+      await Promise.all([fetchEmails(), fetchSummary()]);
+    } catch (err: any) {
+      setError(err.message || 'Failed to archive email');
+      toast.error('Failed to archive email');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const bulkArchiveEmails = async (emailIds: string[]) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const result = await aiApi.bulkArchiveEmails(emailIds);
+      toast.success(`Archived ${result.count || 0} emails`);
+      window.dispatchEvent(new CustomEvent('app:notify', { detail: { text: `Archived ${result.count || 0} emails` } }));
+      await Promise.all([fetchEmails(), fetchSummary()]);
+    } catch (err: any) {
+      setError(err.message || 'Failed to archive emails');
+      toast.error('Failed to archive emails');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const value: EmailContextType = {
     emails,
     summary,
@@ -143,6 +193,9 @@ export const EmailProvider: React.FC<EmailProviderProps> = ({ children }) => {
     deleteSpamEmails,
     searchEmails,
     bulkDeleteEmails,
+    bulkArchiveEmails,
+    deleteEmail,
+    archiveEmail,
   };
 
   return (

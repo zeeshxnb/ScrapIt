@@ -5,7 +5,7 @@ Allows users to interact with their emails via natural language with advanced fe
 import os
 from openai import OpenAI
 import requests
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, or_
 from pydantic import BaseModel
@@ -15,7 +15,7 @@ import json
 
 from database import get_db
 from gmail import GmailService
-from models import User, Email
+from models import User, Email, Task
 from auth import get_current_user
 
 router = APIRouter()
@@ -221,6 +221,10 @@ def process_chat_message(message: str, user: User, db: Session, context: List[di
     intent = intent_data["intent"]
     entities = intent_data["entities"]
     
+    # Check for task execution intent
+    task_intents = ["organize", "clean up", "manage", "handle", "process", "sort", "move", "delete", "archive"]
+    is_task_intent = any(task_word in message.lower() for task_word in task_intents)
+    
     # Build context for AI
     system_context = f"""
     You are an intelligent email management assistant. The user has:
@@ -328,15 +332,33 @@ def process_chat_message(message: str, user: User, db: Session, context: List[di
 • **Search**: "Find emails from john@example.com"
 • **Stats**: "Show me my email summary"
 • **Sync**: "Get my latest emails"
+• **Tasks**: "Move all newsletters to a separate folder"
+• **Automation**: "Archive all read emails from last month"
         
-Just ask me naturally - I understand conversational language!"""
+Just ask me naturally - I understand conversational language and can perform complex tasks for you!"""
         
         suggestions = [
             "Show me my email stats",
             "Delete spam emails", 
             "Classify unprocessed emails",
-            "Sync my latest emails"
+            "Sync my latest emails",
+            "Organize my promotional emails"
         ]
+    
+    elif is_task_intent:
+        # Handle task execution intent
+        from task_executor import process_ai_task
+        
+        # Create a task from the user's message
+        task_result = process_ai_task(message, user, db)
+        
+        if task_result.get("task_created"):
+            action = "execute_task"
+            data = {"task_id": task_result.get("task_id")}
+            ai_response = f"I'll help you with that! {task_result.get('message')} I'll notify you when it's done."
+            quick_actions = [{"label": "Check task status", "action": "check_task_status"}]
+        else:
+            ai_response = f"I understand you want me to help with your emails, but {task_result.get('message', 'I need more specific instructions')}. Could you please provide more details?"
     
     else:
         # Use AI for general conversation
@@ -380,11 +402,28 @@ Just ask me naturally - I understand conversational language!"""
 @router.post("/chat", response_model=ChatResponse)
 async def chat_with_assistant(
     request: ChatRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Enhanced chat with the email management assistant"""
-    return process_chat_message(request.message, current_user, db, request.context)
+    response = process_chat_message(request.message, current_user, db, request.context)
+    
+    # If this is a task execution request, execute the task in background
+    if response.action == "execute_task" and response.data and response.data.get("task_id"):
+        from task_executor import execute_task
+        
+        task_id = response.data["task_id"]
+        task = db.query(Task).filter(
+            Task.id == task_id,
+            Task.user_id == current_user.id
+        ).first()
+        
+        if task:
+            # Execute task in background
+            background_tasks.add_task(execute_task, db, task, current_user)
+    
+    return response
 
 @router.get("/summary", response_model=EmailSummary)
 async def get_email_summary_endpoint(

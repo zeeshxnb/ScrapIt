@@ -2,11 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { MagnifyingGlassIcon, FunnelIcon, TrashIcon, ArchiveBoxIcon, TagIcon, ExclamationTriangleIcon, ClockIcon } from '@heroicons/react/24/outline';
 import { useEmail } from '../contexts/EmailContext.tsx';
 import { onPrefsChange, getPrefs, resolveTimeZone, t } from '../i18n.ts';
-// import { Email } from '../types';
+import { Email } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner.tsx';
 
 const EmailsPage: React.FC = () => {
-  const { emails, fetchEmails, isLoading, bulkDeleteEmails } = useEmail();
+  const { emails, fetchEmails, isLoading, bulkDeleteEmails, bulkArchiveEmails, deleteEmail, archiveEmail } = useEmail();
   const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
@@ -113,6 +113,12 @@ const EmailsPage: React.FC = () => {
     await bulkDeleteEmails(selectedEmails, false);
     setSelectedEmails([]);
   };
+  
+  const handleBulkArchive = async () => {
+    if (selectedEmails.length === 0) return;
+    await bulkArchiveEmails(selectedEmails);
+    setSelectedEmails([]);
+  };
 
   const getCategoryColor = (category: string) => {
     const colors: Record<string, string> = {
@@ -163,13 +169,22 @@ const EmailsPage: React.FC = () => {
               <span className="text-sm text-gray-600">
                 {selectedEmails.length} selected
               </span>
-              <button
-                onClick={handleBulkDelete}
-                className="btn-danger flex items-center space-x-2"
-              >
-                <TrashIcon className="w-4 h-4" />
-                <span>{t('emails.delete')}</span>
-              </button>
+              <div className="flex space-x-2">
+                <button
+                  onClick={handleBulkArchive}
+                  className="btn-secondary flex items-center space-x-2"
+                >
+                  <ArchiveBoxIcon className="w-4 h-4" />
+                  <span>{t('emails.archive')}</span>
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  className="btn-danger flex items-center space-x-2"
+                >
+                  <TrashIcon className="w-4 h-4" />
+                  <span>{t('emails.delete')}</span>
+                </button>
+              </div>
             </div>
           )}
           
@@ -379,12 +394,16 @@ const EmailsPage: React.FC = () => {
                   
                   <div className="flex items-center space-x-2">
                     <button
+                      onClick={() => archiveEmail(email.id)}
                       className="p-1 text-gray-400 hover:text-gray-600 rounded"
                       title={t('emails.archive')}
                     >
                       <ArchiveBoxIcon className="w-4 h-4" />
                     </button>
                     <button
+                      onClick={() => {
+                        deleteEmail(email.id);
+                      }}
                       className="p-1 text-gray-400 hover:text-red-600 rounded"
                       title={t('emails.delete')}
                     >

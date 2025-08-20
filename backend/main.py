@@ -15,6 +15,8 @@ from gmail import gmail_router
 from ai import ai_router
 from chatbot import chatbot_router
 from analytics import router as analytics_router
+from task_executor import task_executor_router
+from notification import notification_router
 
 app = FastAPI(
     title="ScrapIt",
@@ -37,6 +39,8 @@ app.include_router(gmail_router, prefix="/gmail", tags=["gmail"])
 app.include_router(ai_router, prefix="/ai", tags=["ai"])
 app.include_router(chatbot_router, prefix="/chat", tags=["chatbot"])
 app.include_router(analytics_router, prefix="/analytics", tags=["analytics"])
+app.include_router(task_executor_router, prefix="/tasks", tags=["tasks"])
+app.include_router(notification_router, prefix="/notifications", tags=["notifications"])
 
 @app.get("/")
 async def root():

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User, Email
 from auth import get_current_user
+from gmail import GmailService
 
 router = APIRouter()
 
@@ -45,7 +46,7 @@ def classify_email(email: Email) -> dict:
         """
         
         response = openai.ChatCompletion.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
+            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             messages=[{"role": "user", "content": prompt}],
             max_tokens=150,
             temperature=0.1
@@ -273,15 +274,28 @@ async def delete_spam_emails(
     db: Session = Depends(get_db)
 ):
     """Delete all spam emails"""
-    spam_count = db.query(Email).filter(
+    # Get spam emails
+    spam_emails = db.query(Email).filter(
         Email.user_id == current_user.id,
         Email.is_spam == True
-    ).count()
+    ).all()
     
-    db.query(Email).filter(
-        Email.user_id == current_user.id,
-        Email.is_spam == True
-    ).update({"is_deleted": True})
+    # Get Gmail IDs for Gmail API operations
+    gmail_ids = [email.gmail_id for email in spam_emails if email.gmail_id]
+    
+    # Move to trash in Gmail
+    if gmail_ids:
+        gmail_service = GmailService(current_user)
+        gmail_service.batch_modify_messages(gmail_ids, add_label_ids=["TRASH"], remove_label_ids=["INBOX"])
+    
+    # Update local database
+    spam_count = len(spam_emails)
+    for email in spam_emails:
+        email.is_deleted = True
+        if "TRASH" not in email.labels:
+            email.labels = list(set(email.labels + ["TRASH"]))
+        if "INBOX" in email.labels:
+            email.labels.remove("INBOX")
     
     db.commit()
     
@@ -454,10 +468,14 @@ async def remove_sender_flag(
 # Bulk Operations Routes
 from typing import List
 from pydantic import BaseModel
+from gmail import GmailService
 
 class BulkRequest(BaseModel):
     email_ids: List[str]
     permanent: bool = False
+
+class SingleEmailRequest(BaseModel):
+    email_id: str
 
 @router.post("/bulk/delete")
 async def bulk_delete(
@@ -471,22 +489,172 @@ async def bulk_delete(
     
     try:
         count = 0
+        gmail_ids = []
+        emails_to_update = []
+        
+        # First collect all emails and their Gmail IDs
         for email_id in request.email_ids:
             email = db.query(Email).filter(
                 Email.id == email_id,
                 Email.user_id == current_user.id
             ).first()
             if email:
-                if request.permanent:
-                    db.delete(email)
-                else:
-                    email.is_deleted = True
+                if email.gmail_id:
+                    gmail_ids.append(email.gmail_id)
+                emails_to_update.append(email)
                 count += 1
+        
+        # Process Gmail API operations
+        gmail_service = GmailService(current_user)
+        if gmail_ids:
+            if request.permanent:
+                success = gmail_service.batch_delete_messages(gmail_ids)
+                if not success:
+                    raise HTTPException(status_code=502, detail="Failed to delete messages in Gmail")
+            else:
+                success = gmail_service.batch_modify_messages(gmail_ids, add_label_ids=["TRASH"], remove_label_ids=["INBOX"])
+                if not success:
+                    raise HTTPException(status_code=502, detail="Failed to move messages to trash in Gmail")
+        
+        # Update local database
+        for email in emails_to_update:
+            if request.permanent:
+                db.delete(email)
+            else:
+                email.is_deleted = True
+                if "TRASH" not in email.labels:
+                    email.labels = list(set(email.labels + ["TRASH"]))
+                if "INBOX" in email.labels:
+                    email.labels.remove("INBOX")
         
         db.commit()
         return {"message": f"Deleted {count} emails", "count": count}
         
     except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/bulk/archive")
+async def bulk_archive(
+    request: BulkRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Bulk archive emails"""
+    if not request.email_ids or len(request.email_ids) > 1000:
+        raise HTTPException(status_code=400, detail="Invalid email IDs")
+    
+    try:
+        count = 0
+        gmail_ids = []
+        emails_to_update = []
+        
+        # First collect all emails and their Gmail IDs
+        for email_id in request.email_ids:
+            email = db.query(Email).filter(
+                Email.id == email_id,
+                Email.user_id == current_user.id
+            ).first()
+            if email:
+                if email.gmail_id:
+                    gmail_ids.append(email.gmail_id)
+                emails_to_update.append(email)
+                count += 1
+        
+        # Process Gmail API operations
+        gmail_service = GmailService(current_user)
+        if gmail_ids:
+            success = gmail_service.batch_modify_messages(gmail_ids, remove_label_ids=["INBOX"])
+            if not success:
+                raise HTTPException(status_code=502, detail="Failed to archive messages in Gmail")
+        
+        # Update local database
+        for email in emails_to_update:
+            email.is_archived = True
+            if "INBOX" in email.labels:
+                email.labels.remove("INBOX")
+        
+        db.commit()
+        return {"message": f"Archived {count} emails", "count": count}
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/email/delete")
+async def delete_email(
+    request: SingleEmailRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a single email (move to trash)"""
+    try:
+        email = db.query(Email).filter(
+            Email.id == request.email_id,
+            Email.user_id == current_user.id
+        ).first()
+        
+        if not email:
+            raise HTTPException(status_code=404, detail="Email not found")
+            
+        # Move to trash in Gmail
+        gmail_service = GmailService(current_user)
+        if email.gmail_id:
+            success = gmail_service.trash_message(email.gmail_id)
+            if not success:
+                raise HTTPException(status_code=502, detail="Failed to move message to trash in Gmail")
+        
+        # Update local database
+        email.is_deleted = True
+        if "TRASH" not in email.labels:
+            email.labels = list(set(email.labels + ["TRASH"]))
+        if "INBOX" in email.labels:
+            email.labels.remove("INBOX")
+        
+        db.commit()
+        return {"message": "Email moved to trash", "email_id": request.email_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+        
+@router.post("/email/archive")
+async def archive_email(
+    request: SingleEmailRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Archive a single email (remove from inbox)"""
+    try:
+        email = db.query(Email).filter(
+            Email.id == request.email_id,
+            Email.user_id == current_user.id
+        ).first()
+        
+        if not email:
+            raise HTTPException(status_code=404, detail="Email not found")
+            
+        # Archive in Gmail
+        gmail_service = GmailService(current_user)
+        if email.gmail_id:
+            success = gmail_service.archive_message(email.gmail_id)
+            if not success:
+                raise HTTPException(status_code=502, detail="Failed to archive message in Gmail")
+        
+        # Update local database
+        email.is_archived = True
+        if "INBOX" in email.labels:
+            email.labels.remove("INBOX")
+        
+        db.commit()
+        return {"message": "Email archived", "email_id": request.email_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/bulk/classify")

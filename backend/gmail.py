@@ -50,102 +50,49 @@ class GmailService:
                 if credentials.refresh_token:
                     self.user.set_refresh_token(credentials.refresh_token)
                 db.commit()
-                print("🔄 Token refreshed successfully")
             
             self.service = build('gmail', 'v1', credentials=credentials)
             return True
         except Exception as e:
-            print(f"❌ Authentication error: {e}")
+            print(f"Authentication error: {str(e)}")
             return False
     
-    def list_messages(self, query: str = None, max_results: int = None):
-        """List Gmail messages with pagination support - NO LIMITS, gets ALL emails"""
-        if not self.service:
-            self.authenticate()
-            
-        all_messages = []
-        next_page_token = None
-        batch_count = 0
+    def list_messages(self, query: str = "", max_results: int = None) -> List[dict]:
+        """List messages matching the query"""
+        if not self.authenticate():
+            return []
         
         try:
-            while True:
-                batch_count += 1
-                # Use maximum batch size of 500 (Gmail API limit)
-                batch_size = 500
-                
-                result = self.service.users().messages().list(
-                    userId='me',
-                    q=query,
-                    maxResults=batch_size,
-                    pageToken=next_page_token
-                ).execute()
-                
-                messages = result.get('messages', [])
-                all_messages.extend(messages)
-                
-                # Progress bar display
-                progress_percent = min(100, (len(all_messages) / 5000) * 100) if len(all_messages) < 5000 else 100
-                progress_bar = "█" * int(progress_percent / 5) + "░" * (20 - int(progress_percent / 5))
-                print(f"\r📧 Fetching: [{progress_bar}] {len(all_messages)} emails", end="", flush=True)
-                
-                # Check if there are more pages
-                next_page_token = result.get('nextPageToken')
-                if not next_page_token or not messages:
-                    print(f"\n✅ Retrieved {len(all_messages)} emails from Gmail")
-                    break
-                
-                # If max_results is specified and we've reached it, stop
-                if max_results and len(all_messages) >= max_results:
-                    all_messages = all_messages[:max_results]
-                    print(f"🎯 Reached limit: {max_results} messages")
-                    break
-                
-                # Minimal delay to respect rate limits
-                time.sleep(0.05)
+            # Get messages matching query
+            result = self.service.users().messages().list(userId='me', q=query, maxResults=max_results).execute()
+            messages = result.get('messages', [])
             
-            if len(all_messages) > 0:
-                print(f"📧 Total: {len(all_messages)} messages ({batch_count} batches)")
-            return all_messages
+            # Get additional pages if available
+            while 'nextPageToken' in result and (max_results is None or len(messages) < max_results):
+                page_token = result['nextPageToken']
+                result = self.service.users().messages().list(userId='me', q=query, pageToken=page_token).execute()
+                messages.extend(result.get('messages', []))
+                
+                if max_results and len(messages) >= max_results:
+                    messages = messages[:max_results]
+                    break
             
-        except HttpError as e:
-            if e.resp.status == 429:  # Rate limit exceeded
-                print("Rate limit exceeded, waiting...")
-                time.sleep(5)
-                return all_messages  # Return what we have so far
-            print(f"Gmail API error: {e}")
-            return all_messages
+            return messages
         except Exception as e:
-            print(f"Error listing messages: {e}")
-            return all_messages
+            print(f"Error listing messages: {str(e)}")
+            return []
     
-    def get_message(self, message_id: str):
-        """Get single Gmail message with rate limiting"""
-        if not self.service:
-            self.authenticate()
-            
+    def search_messages(self, query: str, max_results: int = 100) -> List[dict]:
+        """Search for messages matching the query"""
+        return self.list_messages(query, max_results)
+    
+    def get_message(self, message_id: str) -> dict:
+        """Get a specific message"""
+        if not self.authenticate():
+            return None
+        
         try:
-            message = self.service.users().messages().get(
-                userId='me',
-                id=message_id
-            ).execute()
-            # Very small delay to respect rate limits
-            time.sleep(0.005)
-            
-            # Extract headers
-            headers = {}
-            if 'payload' in message and 'headers' in message['payload']:
-                for header in message['payload']['headers']:
-                    headers[header['name'].lower()] = header['value']
-            
-            return {
-                'id': message.get('id'),
-                'subject': headers.get('subject', ''),
-                'from': headers.get('from', ''),
-                'to': headers.get('to', ''),
-                'date': headers.get('date', ''),
-                'snippet': message.get('snippet', ''),
-                'labels': message.get('labelIds', [])
-            }
+            return self.service.users().messages().get(userId='me', id=message_id).execute()
         except HttpError as e:
             if e.resp.status == 429:  # Rate limit exceeded
                 print(f"Rate limit exceeded for message {message_id}, skipping...")
@@ -153,6 +100,48 @@ class GmailService:
             return None
         except Exception:
             return None
+            
+    def batch_modify_messages(self, message_ids: List[str], add_label_ids: Optional[List[str]] = None, remove_label_ids: Optional[List[str]] = None) -> bool:
+        """Apply label modifications to many messages at once.
+        
+        For system labels (e.g., 'INBOX', 'TRASH', 'SPAM'), pass the label name directly in add/remove lists.
+        """
+        if not message_ids:
+            return True
+        if not self.service and not self.authenticate():
+            return False
+        try:
+            body = {
+                'ids': message_ids,
+                'addLabelIds': add_label_ids or [],
+                'removeLabelIds': remove_label_ids or [],
+            }
+            self.service.users().messages().batchModify(userId='me', body=body).execute()
+            return True
+        except Exception as e:
+            print(f"Gmail batchModify failed: {str(e)}")
+            return False
+            
+    def batch_delete_messages(self, message_ids: List[str]) -> bool:
+        """Permanently delete many messages at once."""
+        if not message_ids:
+            return True
+        if not self.service and not self.authenticate():
+            return False
+        try:
+            self.service.users().messages().batchDelete(userId='me', body={'ids': message_ids}).execute()
+            return True
+        except Exception as e:
+            print(f"Gmail batchDelete failed: {str(e)}")
+            return False
+            
+    def archive_message(self, message_id: str) -> bool:
+        """Archive a message (remove from inbox)."""
+        return self.batch_modify_messages([message_id], remove_label_ids=["INBOX"])
+        
+    def trash_message(self, message_id: str) -> bool:
+        """Move a message to trash."""
+        return self.batch_modify_messages([message_id], add_label_ids=["TRASH"], remove_label_ids=["INBOX"])
     
     def sync_emails(self, db: Session, max_results: int = None, incremental: bool = False, batch_size: int = 100, specific_labels: list = None, only_inbox: bool = True) -> dict:
         """Enhanced email sync with full Gmail access - gets ALL emails from ALL folders/labels"""
@@ -213,240 +202,121 @@ class GmailService:
                             continue
                         processed_ids.add(msg['id'])
                         
-                        # Check if email already exists (prevent duplicates)
-                        existing = db.query(Email).filter(
+                        # Check if email already exists in database
+                        existing_email = db.query(Email).filter(
                             Email.gmail_id == msg['id'],
                             Email.user_id == self.user.id
                         ).first()
                         
-                        # Skip if already exists and this is a full sync (avoid duplicates)
-                        if existing and not incremental:
-                            continue
-                        
-                        # Get full message details
-                        email_data = self.get_message(msg['id'])
-                        if not email_data:
+                        # Get full message details from Gmail
+                        full_message = self.get_message(msg['id'])
+                        if not full_message:
                             error_count += 1
                             continue
                         
-                        # Parse received date
-                        received_date = datetime.now()
-                        if email_data['date']:
+                        # Extract email data
+                        headers = {header['name']: header['value'] for header in full_message.get('payload', {}).get('headers', [])}
+                        subject = headers.get('Subject', '')
+                        sender = headers.get('From', '')
+                        recipient = headers.get('To', '')
+                        snippet = full_message.get('snippet', '')
+                        
+                        # Parse date
+                        date_str = headers.get('Date')
+                        received_date = None
+                        if date_str:
                             try:
-                                received_date = email.utils.parsedate_to_datetime(email_data['date'])
+                                # Parse email date format
+                                timetuple = email.utils.parsedate_tz(date_str)
+                                if timetuple:
+                                    timestamp = email.utils.mktime_tz(timetuple)
+                                    received_date = datetime.fromtimestamp(timestamp)
                             except:
-                                # Fallback to current time if date parsing fails
                                 pass
                         
-                        if existing:
-                            # Update existing email if needed
-                            updated = False
-                            if existing.subject != email_data['subject']:
-                                existing.subject = email_data['subject']
-                                updated = True
-                            if existing.labels != email_data['labels']:
-                                existing.labels = email_data['labels']
-                                updated = True
-                            # If labels include a system/meaningful label, consider processed
-                            try:
-                                if existing.category or (email_data['labels'] and len(email_data['labels']) > 0):
-                                    if existing.is_processed is False:
-                                        existing.is_processed = True
-                                        updated = True
-                            except Exception:
-                                pass
-                            
-                            if updated:
-                                updated_count += 1
+                        # Get labels
+                        labels = full_message.get('labelIds', [])
+                        
+                        if existing_email:
+                            # Update existing email
+                            existing_email.subject = subject
+                            existing_email.sender = sender
+                            existing_email.recipient = recipient
+                            existing_email.snippet = snippet
+                            existing_email.received_date = received_date
+                            existing_email.labels = labels
+                            updated_count += 1
                         else:
-                            # Create new email record
-                            email_record = Email(
+                            # Create new email
+                            new_email = Email(
+                                gmail_id=msg['id'],
                                 user_id=self.user.id,
-                                gmail_id=email_data['id'],
-                                subject=email_data['subject'] or '(No Subject)',
-                                sender=self.extract_email_address(email_data['from']),
-                                recipient=self.extract_email_address(email_data['to']),
-                                snippet=email_data['snippet'] or '',
-                                labels=email_data['labels'] or [],
+                                subject=subject,
+                                sender=sender,
+                                recipient=recipient,
+                                snippet=snippet,
                                 received_date=received_date,
-                                is_processed=True if (email_data['labels'] and len(email_data['labels']) > 0) else False
+                                labels=labels,
+                                is_processed=False
                             )
-                            
-                            db.add(email_record)
+                            db.add(new_email)
                             new_count += 1
-                    
                     except Exception as e:
+                        print(f"\nError processing message {msg['id']}: {str(e)}")
                         error_count += 1
-                        print(f"Error processing message {msg.get('id', 'unknown')}: {str(e)}")
-                        continue
                 
-                # Commit batch to database
-                try:
-                    db.commit()
-                    # Show save status less frequently
-                    if batch_count % 20 == 0:
-                        print(f"\n💾 Saved progress: {new_count} new, {updated_count} updated")
-                except Exception as e:
-                    db.rollback()
-                    print(f"Error committing batch {batch_count}: {str(e)}")
-                    return {"success": False, "error": f"Database error in batch {batch_count}: {str(e)}"}
-                
-                # Minimal delay between batches
-                time.sleep(0.1)
+                # Commit batch
+                db.commit()
             
             print(f"\n✅ Sync completed: {new_count} new, {updated_count} updated, {error_count} errors")
-            
-            # Validate final count
-            final_count = db.query(Email).filter(Email.user_id == self.user.id).count()
-            print(f"📊 Database now contains: {final_count} emails")
             
             return {
                 "success": True,
                 "new_emails": new_count,
                 "updated_emails": updated_count,
                 "error_count": error_count,
-                "total_processed": len(processed_ids),
-                "total_batches": batch_count,
-                "sync_type": "incremental" if incremental else "full",
-                "all_folders_synced": specific_labels is None,
-                "synced_labels": specific_labels if specific_labels else "ALL",
-                "query_used": query,
-                "batch_size": batch_size,
-                "no_limits_applied": max_results is None,
-                "final_email_count": final_count
+                "total_batches": batch_count
             }
-            
         except Exception as e:
-            db.rollback()
+            print(f"Sync error: {str(e)}")
             return {"success": False, "error": str(e)}
     
-    def extract_email_address(self, email_string: str) -> str:
-        """Extract clean email address from 'Name <email@domain.com>' format"""
-        if not email_string:
-            return ""
-        
-        try:
-            # Use email.utils to parse the address
-            name, address = email.utils.parseaddr(email_string)
-            return address or email_string
-        except:
-            # Fallback: simple regex-like extraction
-            if '<' in email_string and '>' in email_string:
-                start = email_string.find('<') + 1
-                end = email_string.find('>')
-                return email_string[start:end]
-            return email_string
-    
-    def get_email_count(self) -> int:
-        """Get total email count from Gmail"""
-        if not self.authenticate():
-            return 0
-        
-        try:
-            profile = self.service.users().getProfile(userId='me').execute()
-            return profile.get('messagesTotal', 0)
-        except:
-            return 0
-    
-    def get_labels(self) -> list:
-        """Get all Gmail labels/folders"""
+    def get_labels(self) -> List[dict]:
+        """Get all labels for the user"""
         if not self.authenticate():
             return []
         
         try:
-            result = self.service.users().labels().list(userId='me').execute()
-            labels = result.get('labels', [])
-            
-            # Format labels with counts
-            formatted_labels = []
-            for label in labels:
-                formatted_labels.append({
-                    'id': label['id'],
-                    'name': label['name'],
-                    'type': label.get('type', 'user'),
-                    'messages_total': label.get('messagesTotal', 0),
-                    'messages_unread': label.get('messagesUnread', 0)
-                })
-            
-            return formatted_labels
+            results = self.service.users().labels().list(userId='me').execute()
+            return results.get('labels', [])
         except Exception as e:
-            print(f"Error getting labels: {e}")
+            print(f"Error getting labels: {str(e)}")
             return []
     
-    def get_folder_stats(self) -> dict:
-        """Get email counts by folder/label"""
+    def ensure_label(self, label_name: str) -> str:
+        """Ensure a label exists, creating it if necessary, and return its ID"""
         if not self.authenticate():
-            return {}
+            return None
         
         try:
+            # Check if label already exists
             labels = self.get_labels()
-            stats = {}
-            
-            # Get counts for major folders
-            major_folders = ['INBOX', 'SENT', 'DRAFT', 'SPAM', 'TRASH']
-            
             for label in labels:
-                if label['id'] in major_folders or label['type'] == 'user':
-                    stats[label['name']] = {
-                        'total': label['messages_total'],
-                        'unread': label['messages_unread'],
-                        'type': label['type']
-                    }
+                if label['name'].lower() == label_name.lower():
+                    return label['id']
             
-            return stats
+            # Create new label
+            label = self.service.users().labels().create(
+                userId='me',
+                body={'name': label_name}
+            ).execute()
+            
+            return label['id']
         except Exception as e:
-            print(f"Error getting folder stats: {e}")
-            return {}
-    
-    def cleanup_database(self, db: Session) -> dict:
-        """Clean up duplicates and verify email existence in Gmail"""
-        if not self.authenticate():
-            return {"success": False, "error": "Authentication failed"}
-        
-        try:
-            print("🧹 Starting database cleanup...")
-            
-            # 1. Remove duplicates based on gmail_id
-            print("🔍 Checking for duplicates...")
-            duplicates_removed = 0
-            
-            # Find emails with duplicate gmail_ids
-            from sqlalchemy import func
-            duplicate_gmail_ids = db.query(Email.gmail_id).filter(
-                Email.user_id == str(self.user.id)
-            ).group_by(Email.gmail_id).having(func.count(Email.gmail_id) > 1).all()
-            
-            for (gmail_id,) in duplicate_gmail_ids:
-                # Keep the first one, delete the rest
-                emails_with_id = db.query(Email).filter(
-                    Email.gmail_id == gmail_id,
-                    Email.user_id == str(self.user.id)
-                ).order_by(Email.created_at).all()
-                
-                # Delete all but the first
-                for email in emails_with_id[1:]:
-                    db.delete(email)
-                    duplicates_removed += 1
-            
-            db.commit()
-            print(f"🗑️  Removed {duplicates_removed} duplicate emails")
-            
-            # 2. Get current count
-            current_count = db.query(Email).filter(Email.user_id == str(self.user.id)).count()
-            print(f"📊 Database now has {current_count} emails")
-            
-            return {
-                "success": True,
-                "duplicates_removed": duplicates_removed,
-                "final_count": current_count
-            }
-            
-        except Exception as e:
-            db.rollback()
-            print(f"❌ Cleanup error: {e}")
-            return {"success": False, "error": str(e)}
+            print(f"Error ensuring label: {str(e)}")
+            return None
 
-# Routes
+# Request Models
 class SyncRequest(BaseModel):
     max_results: Optional[int] = None
     incremental: bool = True
@@ -454,6 +324,7 @@ class SyncRequest(BaseModel):
     only_inbox: bool = True
     labels: Optional[List[str]] = None
 
+# Routes
 @router.post("/sync")
 async def sync_emails(
     body: SyncRequest,
@@ -534,208 +405,88 @@ async def get_emails(
             }
             for email in emails
         ],
-        "pagination": {
-            "total": total_count,
-            "limit": limit,
-            "offset": offset,
-            "has_more": offset + limit < total_count
-        }
+        "total": total_count,
+        "limit": limit,
+        "offset": offset
     }
 
-@router.get("/stats")
-async def get_gmail_stats(
+@router.get("/emails/{email_id}")
+async def get_email(
+    email_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get Gmail sync statistics including folder breakdown"""
-    
-    gmail_service = GmailService(current_user)
-    
-    # Local email counts
-    total_local = db.query(Email).filter(Email.user_id == current_user.id).count()
-    spam_local = db.query(Email).filter(
-        Email.user_id == current_user.id,
-        Email.is_spam == True
-    ).count()
-    unprocessed_local = db.query(Email).filter(
-        Email.user_id == current_user.id,
-        Email.is_processed == False
-    ).count()
-    
-    # Latest sync info
-    latest_email = db.query(Email).filter(
+    """Get a specific email"""
+    email = db.query(Email).filter(
+        Email.id == email_id,
         Email.user_id == current_user.id
-    ).order_by(Email.received_date.desc()).first()
+    ).first()
     
-    # Gmail total and folder stats
-    gmail_total = gmail_service.get_email_count()
-    folder_stats = gmail_service.get_folder_stats()
+    if not email:
+        raise HTTPException(status_code=404, detail="Email not found")
     
     return {
-        "local_stats": {
-            "total_emails": total_local,
-            "spam_emails": spam_local,
-            "unprocessed_emails": unprocessed_local,
-            "latest_email_date": latest_email.received_date.isoformat() if latest_email and latest_email.received_date else None
-        },
-        "gmail_stats": {
-            "total_emails": gmail_total,
-            "sync_coverage": round((total_local / gmail_total * 100), 2) if gmail_total > 0 else 0,
-            "folder_breakdown": folder_stats
-        },
-        "sync_status": {
-            "is_connected": gmail_service.authenticate(),
-            "needs_sync": gmail_total > total_local if gmail_total > 0 else False,
-            "supports_all_folders": True
-        }
+        "id": str(email.id),
+        "gmail_id": email.gmail_id,
+        "subject": email.subject,
+        "sender": email.sender,
+        "snippet": email.snippet,
+        "category": email.category,
+        "confidence_score": email.confidence_score,
+        "is_spam": email.is_spam,
+        "is_processed": email.is_processed,
+        "spam_reason": email.spam_reason,
+        "sender_risk": email.sender_risk,
+        "received_date": email.received_date.isoformat() if email.received_date else None,
+        "labels": email.labels
     }
 
-@router.get("/folders")
-async def get_gmail_folders(
+@router.get("/labels")
+async def get_labels(
     current_user: User = Depends(get_current_user)
 ):
-    """Get all Gmail folders/labels with email counts"""
-    
+    """Get all labels for the user"""
     gmail_service = GmailService(current_user)
-    
-    if not gmail_service.authenticate():
-        raise HTTPException(status_code=401, detail="Gmail authentication failed")
-    
     labels = gmail_service.get_labels()
-    folder_stats = gmail_service.get_folder_stats()
     
     return {
-        "folders": labels,
-        "folder_stats": folder_stats,
-        "total_folders": len(labels),
-        "message": "All Gmail folders/labels retrieved successfully"
+        "labels": labels
     }
 
 @router.post("/full-sync")
 async def full_sync(
-    batch_size: int = 100,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Perform a COMPLETE full email sync - gets ALL emails from ALL folders/labels"""
-    
-    # Validate batch_size
-    if batch_size > 500:
-        batch_size = 500
-    elif batch_size < 10:
-        batch_size = 10
-    
-    gmail_service = GmailService(current_user)
-    result = gmail_service.sync_emails(db, max_results=None, incremental=False, batch_size=batch_size)
-    
-    if not result["success"]:
-        raise HTTPException(status_code=400, detail=result["error"])
-    
-    return {
-        "message": f"COMPLETE full sync finished: {result['new_emails']} new emails from ALL folders/labels",
-        **result
-    }
-
-@router.post("/sync-all-folders")
-async def sync_all_folders(
-    batch_size: int = 100,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Sync ALL emails from ALL Gmail folders/labels - alias for full-sync"""
-    
-    # Validate batch_size
-    if batch_size > 500:
-        batch_size = 500
-    elif batch_size < 10:
-        batch_size = 10
-    
-    gmail_service = GmailService(current_user)
-    result = gmail_service.sync_emails(db, max_results=None, incremental=False, batch_size=batch_size)
-    
-    if not result["success"]:
-        raise HTTPException(status_code=400, detail=result["error"])
-    
-    return {
-        "message": f"All folders sync completed: {result['new_emails']} new emails from inbox, sent, drafts, spam, trash, and custom labels",
-        **result
-    }
-
-@router.post("/sync-folders")
-async def sync_specific_folders(
-    labels: list[str],
-    batch_size: int = 100,
-    incremental: bool = False,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Sync emails from specific Gmail folders/labels"""
-    
-    if not labels:
-        raise HTTPException(status_code=400, detail="At least one label must be specified")
-    
-    # Validate batch_size
-    if batch_size > 500:
-        batch_size = 500
-    elif batch_size < 10:
-        batch_size = 10
-    
+    """Full sync of ALL emails (non-incremental)"""
     gmail_service = GmailService(current_user)
     result = gmail_service.sync_emails(
-        db, 
-        max_results=None, 
-        incremental=incremental, 
-        batch_size=batch_size,
-        specific_labels=labels
+        db,
+        incremental=False,
+        only_inbox=False  # Get ALL emails
     )
     
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["error"])
     
-    return {
-        "message": f"Specific folders sync completed: {result['new_emails']} new emails from {', '.join(labels)}",
-        "synced_labels": labels,
-        **result
-    }
+    return result
 
-@router.post("/cleanup")
-async def cleanup_database(
+@router.post("/sync-all-folders")
+async def sync_all_folders(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Clean up duplicate emails and fix database inconsistencies"""
-    
+    """Sync emails from all folders"""
     gmail_service = GmailService(current_user)
-    result = gmail_service.cleanup_database(db)
+    result = gmail_service.sync_emails(
+        db,
+        only_inbox=False  # Get ALL emails
+    )
     
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["error"])
     
-    return {
-        "message": f"Cleanup completed: {result['duplicates_removed']} duplicates removed",
-        **result
-    }
-
-@router.delete("/reset")
-async def reset_email_database(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Reset email database - DELETE ALL emails for fresh sync"""
-    
-    try:
-        # Delete all emails for this user
-        deleted_count = db.query(Email).filter(Email.user_id == current_user.id).count()
-        db.query(Email).filter(Email.user_id == current_user.id).delete()
-        db.commit()
-        
-        return {
-            "message": f"Database reset: {deleted_count} emails deleted. Ready for fresh sync.",
-            "deleted_count": deleted_count
-        }
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Reset failed: {str(e)}")
+    return result
 
 # Export router
 gmail_router = router

@@ -99,6 +99,27 @@ export const aiApi = {
     });
     return response.data;
   },
+  
+  bulkArchiveEmails: async (emailIds: string[]) => {
+    const response = await api.post('/ai/bulk/archive', {
+      email_ids: emailIds,
+    });
+    return response.data;
+  },
+
+  deleteEmail: async (emailId: string) => {
+    const response = await api.post('/ai/email/delete', {
+      email_id: emailId,
+    });
+    return response.data;
+  },
+
+  archiveEmail: async (emailId: string) => {
+    const response = await api.post('/ai/email/archive', {
+      email_id: emailId,
+    });
+    return response.data;
+  },
 };
 
 // Chat API

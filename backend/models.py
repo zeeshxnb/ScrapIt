@@ -1,6 +1,6 @@
 """
 Database Models - Consolidated
-User and Email models with encryption support
+User, Email, and Task models with encryption support
 """
 import os
 import uuid
@@ -138,4 +138,30 @@ class SenderFlag(Base):
     # Relationships
     user = relationship("User", back_populates="sender_flags")
 
-# Removed BulkOperation - keeping it simple with direct email operations
+# Task model for tracking multi-step operations
+class Task(Base):
+    """Track complex multi-step tasks for email management"""
+    __tablename__ = "tasks"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    
+    # Task details
+    type = Column(String(50))  # email_cleanup, email_organization, etc.
+    description = Column(String(500))
+    status = Column(String(20))  # pending, in_progress, completed, failed, cancelled
+    steps = Column(JSON)  # List of steps with their status
+    priority = Column(Integer, default=1)  # 1 (highest) to 5 (lowest)
+    
+    # Progress tracking
+    progress = Column(Integer, default=0)  # 0-100%
+    result = Column(JSON, nullable=True)  # Results from completed task
+    error = Column(String(1000), nullable=True)  # Error message if failed
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    user = relationship("User", backref="tasks")
