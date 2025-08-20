@@ -17,6 +17,7 @@ from database import get_db
 from gmail import GmailService
 from models import User, Email, Task
 from auth import get_current_user
+from task_executor import TaskStatus
 
 router = APIRouter()
 
@@ -221,8 +222,12 @@ def process_chat_message(message: str, user: User, db: Session, context: List[di
     intent = intent_data["intent"]
     entities = intent_data["entities"]
     
-    # Check for task execution intent
-    task_intents = ["organize", "clean up", "manage", "handle", "process", "sort", "move", "delete", "archive"]
+    # Check for task execution intent - expanded to cover more email management operations
+    task_intents = [
+        "organize", "clean up", "manage", "handle", "process", "sort", "move", "delete", "archive", 
+        "label", "categorize", "star", "flag", "mark", "filter", "find", "search", 
+        "older than", "newer than", "from:", "to:", "subject:", "has:", "remove", "clear"
+    ]
     is_task_intent = any(task_word in message.lower() for task_word in task_intents)
     
     # Build context for AI
@@ -327,38 +332,57 @@ def process_chat_message(message: str, user: User, db: Session, context: List[di
     elif intent == "help":
         ai_response = """I can help you manage your emails! Here's what I can do:
         
-• **Clean up**: "Delete my spam emails"
-• **Organize**: "Classify my emails" 
-• **Search**: "Find emails from john@example.com"
-• **Stats**: "Show me my email summary"
-• **Sync**: "Get my latest emails"
-• **Tasks**: "Move all newsletters to a separate folder"
-• **Automation**: "Archive all read emails from last month"
+• **Clean up**: "Delete all spam emails" or "Delete emails older than 3 months"
+• **Organize**: "Archive all newsletters" or "Label all emails from amazon as shopping" 
+• **Search**: "Find emails from john@example.com" or "Find emails with attachments"
+• **Stats**: "Show me my email summary" or "How many unread emails do I have?"
+• **Sync**: "Get my latest emails from Gmail"
+• **Tasks**: "Mark all promotional emails as read" or "Star important emails from my boss"
+• **Multi-step actions**: "Find all shopping receipts and archive them"
+
+You can use complex criteria like:
+- "Archive all emails older than 2 months that I've already read"
+- "Delete all promotional emails except those from Amazon"
+- "Find all unread emails from my team and mark them as important"
         
-Just ask me naturally - I understand conversational language and can perform complex tasks for you!"""
+Just ask me naturally - I understand conversational language and can build task lists that execute via Gmail!"""
         
         suggestions = [
             "Show me my email stats",
-            "Delete spam emails", 
-            "Classify unprocessed emails",
-            "Sync my latest emails",
-            "Organize my promotional emails"
+            "Delete all spam emails", 
+            "Archive all read newsletters",
+            "Mark all promotional emails as read",
+            "Find emails with attachments and label them"
         ]
     
     elif is_task_intent:
-        # Handle task execution intent
+        # Handle task execution intent using enhanced AI task generator
         from task_executor import process_ai_task
         
-        # Create a task from the user's message
+        # Create a task from the user's message using advanced AI parsing
         task_result = process_ai_task(message, user, db)
         
         if task_result.get("task_created"):
             action = "execute_task"
-            data = {"task_id": task_result.get("task_id")}
-            ai_response = f"I'll help you with that! {task_result.get('message')} I'll notify you when it's done."
-            quick_actions = [{"label": "Check task status", "action": "check_task_status"}]
+            task_id = task_result.get("task_id")
+            data = {"task_id": task_id}
+            
+            # Get the task to show more details about what will be done
+            task = db.query(Task).filter(Task.id == task_id).first()
+            step_count = len(task.steps) if task and task.steps else 0
+            
+            # Create a more detailed response based on the task
+            if step_count > 1:
+                ai_response = f"I'll help you with that! I've created a task with {step_count} steps to {task_result.get('message')} I'll execute this right away and notify you when it's done."
+            else:
+                ai_response = f"I'll help you with that! {task_result.get('message')} I'll notify you when it's done."
+                
+            quick_actions = [
+                {"label": "Check task status", "action": "check_task_status"},
+                {"label": "Cancel task", "action": "cancel_task"}
+            ]
         else:
-            ai_response = f"I understand you want me to help with your emails, but {task_result.get('message', 'I need more specific instructions')}. Could you please provide more details?"
+            ai_response = f"I understand you want me to help with your emails, but {task_result.get('message', 'I need more specific instructions')}. Could you please provide more details about what emails you want to manage and what you'd like me to do with them?"
     
     else:
         # Use AI for general conversation
@@ -407,11 +431,82 @@ async def chat_with_assistant(
     db: Session = Depends(get_db)
 ):
     """Enhanced chat with the email management assistant"""
+    
+    # Check if this is a request about a specific task status
+    message_lower = request.message.lower()
+    
+    # Handle requests for task status or details
+    if any(phrase in message_lower for phrase in ["task status", "check task", "how's the task", "task details", "task progress"]):
+        # Find the most recent active task
+        recent_task = db.query(Task).filter(
+            Task.user_id == current_user.id,
+            Task.status.in_([TaskStatus.PENDING, TaskStatus.IN_PROGRESS])
+        ).order_by(Task.created_at.desc()).first()
+        
+        if recent_task:
+            status_str = "in progress" if recent_task.status == TaskStatus.IN_PROGRESS else "pending"
+            progress_str = f"{recent_task.progress}% complete" if recent_task.progress > 0 else "just started"
+            
+            # Get task details
+            steps = recent_task.steps or []
+            completed_steps = sum(1 for step in steps if step.get("completed", False))
+            
+            # Prepare appropriate quick actions based on task status
+            quick_actions = [{"label": "Show detailed steps", "action": "get_task_details"}]
+            
+            if recent_task.status == TaskStatus.FAILED:
+                # For failed tasks, offer retry option
+                quick_actions.append({"label": "Retry failed task", "action": "retry_task"})
+                status_info = f"failed: {recent_task.error or 'Unknown error'}"
+                
+            elif recent_task.status == TaskStatus.COMPLETED:
+                # For completed tasks, offer restart option
+                quick_actions.append({"label": "Run this task again", "action": "retry_task"})
+                status_info = f"{status_str} and {progress_str}"
+                
+            elif recent_task.status == TaskStatus.IN_PROGRESS:
+                # For in-progress tasks
+                quick_actions.append({"label": "Cancel task", "action": "cancel_task"})
+                status_info = f"{status_str} and {progress_str}"
+                
+            else:
+                # For other statuses (pending, cancelled)
+                if recent_task.status == TaskStatus.CANCELLED:
+                    quick_actions.append({"label": "Restart task", "action": "retry_task"})
+                status_info = f"{status_str}"
+            
+            return ChatResponse(
+                response=f"Your task '{recent_task.description}' is {status_info}. {completed_steps} of {len(steps)} steps completed.",
+                action="show_task_details",
+                data={"task_id": recent_task.id},
+                quick_actions=quick_actions
+            )
+        else:
+            return ChatResponse(
+                response="You don't have any active tasks at the moment. Would you like me to help you with your emails?",
+                suggestions=[
+                    "Delete all spam emails",
+                    "Archive all read emails",
+                    "Mark all promotional emails as read"
+                ]
+            )
+    
+    # Normal processing for other messages
     response = process_chat_message(request.message, current_user, db, request.context)
     
-    # If this is a task execution request, execute the task in background
+    # If this is a task execution request, execute simple tasks directly or complex tasks in background
     if response.action == "execute_task" and response.data and response.data.get("task_id"):
-        from task_executor import execute_task
+        from task_executor import execute_task, is_simple_task
+        import asyncio
+        import logging
+        
+        logger = logging.getLogger("task_execution")
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+            logger.setLevel(logging.INFO)
         
         task_id = response.data["task_id"]
         task = db.query(Task).filter(
@@ -420,10 +515,82 @@ async def chat_with_assistant(
         ).first()
         
         if task:
-            # Execute task in background
-            background_tasks.add_task(execute_task, db, task, current_user)
+            # Check if this is a simple task that can be executed immediately
+            if is_simple_task(task):
+                logger.info(f"Executing simple task {task_id} directly for immediate feedback")
+                try:
+                    # Execute task directly for immediate feedback
+                    result = await execute_task(db, task, current_user)
+                    
+                    # Update response with execution result
+                    if task.status == "completed":
+                        # Success case - update the response
+                        success_details = ""
+                        if task.result:
+                            for step_key, step_result in task.result.items():
+                                if "count" in step_result:
+                                    success_details += f" Processed {step_result['count']} emails."
+                        
+                        response.response = f"✅ Task completed successfully!{success_details}"
+                    elif task.status == "failed":
+                        # Error case - update the response
+                        response.response = f"❌ Task failed: {task.error or 'Unknown error'}"
+                    
+                    # Add task info to response data
+                    if response.data is None:
+                        response.data = {}
+                    response.data["task_result"] = result
+                    response.data["immediate_execution"] = True
+                    
+                except Exception as e:
+                    logger.error(f"Error executing task directly: {str(e)}")
+                    # Keep original response but add error info
+                    if response.data is None:
+                        response.data = {}
+                    response.data["execution_error"] = str(e)
+            else:
+                logger.info(f"Scheduling complex task {task_id} for background execution")
+                # Execute complex task in background
+                background_tasks.add_task(execute_task, db, task, current_user)
+                
+                # Add expected time hint
+                step_count = len(task.steps) if task.steps else 0
+                if step_count > 0:
+                    estimated_seconds = min(step_count * 2, 10)  # Simple estimate
+                    response.response += f" It should take about {estimated_seconds} seconds to complete."
     
     return response
+
+@router.post("/chat/task-details/{task_id}")
+async def get_task_details(
+    task_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get detailed information about a task for the chat interface"""
+    from task_executor import get_task_details
+    
+    # Reuse the task_executor's task details endpoint
+    task_details = await get_task_details(task_id, current_user, db)
+    
+    # Format the steps into a readable message
+    steps_text = "\n".join([
+        f"Step {step['step_number']}: {step['description']} - {'✅ Done' if step['completed'] else '🔄 Pending'}"
+        for step in task_details.get("detailed_steps", [])
+    ])
+    
+    status_emoji = {
+        "pending": "⏳",
+        "in_progress": "🔄",
+        "completed": "✅",
+        "failed": "❌",
+        "cancelled": "🚫"
+    }.get(task_details.get("status", ""), "")
+    
+    return {
+        "message": f"Task: {task_details.get('description')}\nStatus: {status_emoji} {task_details.get('status')}\nProgress: {task_details.get('progress')}%\n\nSteps:\n{steps_text}",
+        "task_details": task_details
+    }
 
 @router.get("/summary", response_model=EmailSummary)
 async def get_email_summary_endpoint(
